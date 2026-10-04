@@ -173,7 +173,7 @@ export function ModelsTab({ projectId }: { projectId: string }) {
                   }, 1500);
                   setTimeout(async () => {
                     const isRegression = modelForm.taskType === 'regression';
-                    const mockMetrics = isRegression
+                    const mockMetrics: Record<string, number> = isRegression
                       ? { rmse: 0.0832, mae: 0.0654, r2: 0.87 + Math.random() * 0.08 }
                       : { accuracy: 0.86 + Math.random() * 0.1, precision: 0.82 + Math.random() * 0.1, recall: 0.79 + Math.random() * 0.1, f1: 0.81 + Math.random() * 0.08 };
                     const mockFeatures = ['transaction_count', 'avg_amount', 'days_active', 'balance_trend', 'network_diversity', 'frequency_score']
@@ -310,7 +310,7 @@ function ModelDetailPanel({ model, onClose, t }: { model: Model; onClose: () => 
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" stroke="#94a3b8" fontSize={12} domain={[0, 100]} />
               <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={120} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v: any) => `${v}%`} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v) => `${v}%`} />
               <Bar dataKey="value" fill="#df8429" radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>

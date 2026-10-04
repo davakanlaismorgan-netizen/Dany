@@ -33,15 +33,13 @@ export default function MarketplacePage() {
   ];
 
   const filtered = marketplaceTemplates.filter((tpl) => {
-    const matchesSearch = t('marketplace.search') !== '' && (
-      tpl.name.toLowerCase().includes(search.toLowerCase()) ||
-      tpl.desc.toLowerCase().includes(search.toLowerCase()) ||
-      tpl.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()))
-    );
+    const q = search.toLowerCase();
+    const matchesSearch = q === '' ||
+      tpl.name.toLowerCase().includes(q) ||
+      tpl.desc.toLowerCase().includes(q) ||
+      tpl.tags.some(tag => tag.toLowerCase().includes(q));
     const matchesFilter = filter === 'all' || tpl.sector === filter;
-    return (search === '' || tpl.name.toLowerCase().includes(search.toLowerCase()) ||
-      tpl.desc.toLowerCase().includes(search.toLowerCase()) ||
-      tpl.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()))) && matchesFilter;
+    return matchesSearch && matchesFilter;
   });
 
   return (

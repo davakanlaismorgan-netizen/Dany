@@ -80,7 +80,7 @@ export default function PricingPage() {
       amount: plan.amount,
       plan: plan.planKey,
       email: user?.email,
-      fullname: (user as any)?.user_metadata?.full_name,
+      fullname: user?.user_metadata?.full_name as string | undefined,
       onSuccess: async (transactionId) => {
         setPayStatus('verifying');
         try {

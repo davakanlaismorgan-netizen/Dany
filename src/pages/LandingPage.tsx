@@ -8,7 +8,6 @@ import {
   Workflow,
   Globe,
   Zap,
-  TrendingUp,
   MessageSquare,
   Check,
   ArrowRight,
