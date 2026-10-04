@@ -47,8 +47,13 @@ export function timeAgo(dateStr: string, lang: string = 'fr'): string {
   return formatDate(dateStr, lang);
 }
 
-const ILLEGAL_FILENAME_CHARS = /[/\\:*?"<>|..]/g;
+const ILLEGAL_FILENAME_CHARS = /[/\\:*?"<>|]/g;
 
 export function sanitizeFilename(name: string): string {
-  return name.replace(ILLEGAL_FILENAME_CHARS, '_').replace(/_+/g, '_').slice(0, 200);
+  // Neutralise aussi les séquences ".." (traversée de chemin) sans toucher à l'extension.
+  return name
+    .replace(ILLEGAL_FILENAME_CHARS, '_')
+    .replace(/\.{2,}/g, '_')
+    .replace(/_+/g, '_')
+    .slice(-200);
 }

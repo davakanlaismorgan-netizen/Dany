@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, Legend,
 } from 'recharts';
@@ -23,7 +23,6 @@ import type { Project, Dataset, Model, Report } from '@/types';
 import { recentActivity, dashboardChartData, sectorConfig } from '@/lib/mockData';
 import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
 import { timeAgo, formatNumber, cn } from '@/lib/utils';
-import { useI18n } from '@/context/I18nContext';
 
 const sectorColors: Record<string, string> = {
   finance: '#df8429',
@@ -151,7 +150,7 @@ export function DashboardPage() {
               <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => formatNumber(v)} />
               <Tooltip
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }}
-                formatter={(v: any) => formatNumber(v)}
+                formatter={(v) => formatNumber(Number(v))}
               />
               <Legend wrapperStyle={{ fontSize: '13px' }} />
               <Area type="monotone" dataKey="sent" name="Sent" stroke="#df8429" fillOpacity={1} fill="url(#colorSent)" strokeWidth={2} />
@@ -185,7 +184,7 @@ export function DashboardPage() {
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v: any) => `${v}%`} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v) => `${v}%`} />
               <Legend wrapperStyle={{ fontSize: '13px' }} />
             </PieChart>
           </ResponsiveContainer>

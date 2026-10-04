@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  Plus, BarChart3, TrendingUp, PieChart as PieIcon, ScatterChart as ScatterIcon,
+  BarChart3, TrendingUp, PieChart as PieIcon, ScatterChart as ScatterIcon,
   AreaChart as AreaIcon, Map, Save, Trash2, Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -273,7 +273,7 @@ function ChartRenderer({ type, compact = false }: { type: string; compact?: bool
               <Cell key={i} fill={pieColors[i % pieColors.length]} />
             ))}
           </Pie>
-          <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v: any) => `${v}%`} />
+          <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v) => `${v}%`} />
           {!compact && <Legend wrapperStyle={{ fontSize: '13px' }} />}
         </PieChart>
       </ResponsiveContainer>

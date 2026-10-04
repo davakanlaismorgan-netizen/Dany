@@ -9,6 +9,10 @@ import {
 const KKIAPAY_PUBLIC_KEY = import.meta.env.VITE_KKIAPAY_PUBLIC_KEY || 'xxxxxxx';
 const KKIAPAY_SANDBOX = import.meta.env.VITE_KKIAPAY_SANDBOX === 'true';
 
+// L'enum CountryCode de kkiapay n'est pas exporté : on dérive le type depuis la signature du widget.
+type KkiapayCountries = NonNullable<Parameters<typeof openKkiapayWidget>[0]['countries']>;
+const KKIAPAY_COUNTRIES = ['SN', 'CI', 'BJ', 'TG', 'NE'] as unknown as KkiapayCountries;
+
 export interface KkiapayPaymentOptions {
   amount: number;
   fullname?: string;
@@ -29,7 +33,7 @@ export function openPaymentWidget(options: KkiapayPaymentOptions) {
     phone: options.phone,
     theme: '#d97706',
     position: 'center',
-    countries: ['SN', 'CI', 'BJ', 'TG', 'NE'],
+    countries: KKIAPAY_COUNTRIES,
     data: { plan: options.plan },
   });
 

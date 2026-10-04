@@ -151,7 +151,7 @@ export default function SettingsPage() {
       amount: 2900,
       plan: 'premium',
       email: user?.email,
-      fullname: profile?.full_name,
+      fullname: profile?.full_name ?? undefined,
       phone: phone || undefined,
       onSuccess: async (transactionId) => {
         setPayStatus('verifying');
