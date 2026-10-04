@@ -1,0 +1,5 @@
+[functions.delete-account]
+verify_jwt = true
+
+[functions.verify-kkiapay]
+verify_jwt = true
