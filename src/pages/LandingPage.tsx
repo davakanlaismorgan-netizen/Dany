@@ -1,7 +1,8 @@
+import { LogoMark } from '@/components/LogoMark';
+import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
-  Brain,
   BarChart3,
   Database,
   Sparkles,
@@ -80,12 +81,12 @@ export function LandingPage() {
 
   const plans = [
     {
-      name: t('pricing.free'), price: '$0', period: t('pricing.forever'), desc: t('pricing.free.desc'),
-      features: lang === 'fr' ? ['3 projets', '10K lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque Danysia'] : ['3 projects', '10K rows per dataset', '5 visualizations', 'Basic AutoML (3 models)', 'Community support', 'Danysia branding'],
+      name: t('pricing.free'), price: formatXof(0, lang), period: t('pricing.forever'), desc: t('pricing.free.desc'),
+      features: lang === 'fr' ? ['3 projets', '10K lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque DAS'] : ['3 projects', '10K rows per dataset', '5 visualizations', 'Basic AutoML (3 models)', 'Community support', 'DAS branding'],
       cta: t('pricing.startfree'), highlight: false,
     },
     {
-      name: t('pricing.premium'), price: '$29', period: t('pricing.month'), desc: t('pricing.premium.desc'),
+      name: t('pricing.premium'), price: formatXof(PREMIUM_PRICE_XOF, lang), period: t('pricing.month'), desc: t('pricing.premium.desc'),
       features: lang === 'fr' ? ['Projets illimités', 'AutoML complet', 'Tous les modules sectoriels', 'PNT avancée & multilingue', 'Accès API', 'Rapports white-label', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire'] : ['Unlimited projects', 'Full AutoML suite', 'All sector modules', 'Advanced NLP & multilingual', 'API access', 'White-label reports', 'Team collaboration (10 users)', 'Priority support'],
       cta: t('pricing.trial.btn'), highlight: true,
     },
@@ -128,10 +129,8 @@ export function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center shadow-md">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-neutral-900">Danysia</span>
+            <LogoMark className="w-9 h-9" />
+            <span className="text-neutral-900">DAS</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
@@ -430,10 +429,8 @@ export function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-1">
               <div className="flex items-center gap-2 font-display font-bold text-xl mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center">
-                  <Brain className="w-5 h-5 text-white" />
-                </div>
-                Danysia
+                <LogoMark className="w-9 h-9" />
+                DAS
               </div>
               <p className="text-sm text-white/50">
                 {t('landing.footer.desc')}
@@ -455,7 +452,7 @@ export function LandingPage() {
           </div>
 
           <div className="mt-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-white/40">© 2026 Danysia. {lang === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}</p>
+            <p className="text-sm text-white/40">© 2026 DAS. {lang === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}</p>
             <div className="flex items-center gap-4 text-sm text-white/40">
               <span>EN · FR · AR · SW</span>
             </div>

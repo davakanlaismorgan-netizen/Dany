@@ -5,6 +5,7 @@ import {
   ArrowRight, ArrowLeft, Check, Upload, Link2, FileSpreadsheet,
   Cloud, Globe, AlertTriangle,
 } from 'lucide-react';
+import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { Sector } from '@/types';
 import { cn } from '@/lib/utils';
@@ -72,7 +73,7 @@ export function NewProjectPage() {
       if (error) throw error;
       if (data) navigate(`/projects/${data.id}/data`);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : (lang === 'fr' ? 'Échec de la création du projet' : 'Failed to create project'));
+      setCreateError(friendlyError(err, lang === 'fr' ? 'Échec de la création du projet' : 'Failed to create project', t));
     } finally {
       setCreating(false);
     }

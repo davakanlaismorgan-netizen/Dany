@@ -1,14 +1,16 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import type { Profile } from '@/types';
+import type { Plan, Profile } from '@/types';
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, company?: string) => Promise<{ error: string | null }>;
+  // Fin de validité du plan payant (null pour le plan gratuit ou un plan sans échéance).
+  planExpiresAt: string | null;
+  signUp: (email: string, password: string, fullName: string, company?: string) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -21,19 +23,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
 
   async function loadProfile(userId: string) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    // Le plan n'est plus une colonne modifiable de profiles : il vient de l'abonnement,
+    // calculé côté base avec sa date d'expiration (current_plan), et jamais du navigateur.
+    const [profileRes, planRes, subscriptionRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      supabase.rpc('current_plan'),
+      supabase.from('subscriptions').select('current_period_end').eq('user_id', userId).maybeSingle(),
+    ]);
 
-    if (error) {
-      console.error('Error loading profile:', error);
+    if (profileRes.error) {
+      console.error('Error loading profile:', profileRes.error);
       return;
     }
-    setProfile(data as Profile | null);
+    if (planRes.error) console.error('Error loading plan:', planRes.error);
+
+    const rawPlan = planRes.data as string | null;
+    const plan: Plan = rawPlan === 'premium' || rawPlan === 'enterprise' ? rawPlan : 'free';
+    setProfile(profileRes.data ? { ...(profileRes.data as Omit<Profile, 'plan'>), plan } : null);
+    setPlanExpiresAt(plan === 'free' ? null : (subscriptionRes.data?.current_period_end as string | null) ?? null);
   }
 
   useEffect(() => {
@@ -72,14 +82,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, company: company || undefined } },
+      options: {
+        data: { full_name: fullName, company: company || undefined },
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+      },
     });
     if (error) return { error: error.message };
-    // Don't loadProfile if no session was created (email confirmation required)
+    // Pas de session = confirmation de l'email requise par Supabase Auth.
     if (data.user && data.session) {
       await loadProfile(data.user.id);
     }
-    return { error: null };
+    return { error: null, needsEmailConfirmation: !data.session };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -93,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setProfile(null);
+    setPlanExpiresAt(null);
   };
 
   const refreshProfile = async () => {
@@ -101,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, loading, signUp, signIn, signOut, refreshProfile }}
+      value={{ session, user, profile, loading, planExpiresAt, signUp, signIn, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

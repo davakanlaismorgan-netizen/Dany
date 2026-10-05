@@ -9,6 +9,8 @@ import { AuthLayout } from '@/components/layouts/AuthLayout';
 
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const ProjectsPage = lazy(() => import('@/pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
 const NewProjectPage = lazy(() => import('@/pages/NewProjectPage').then(m => ({ default: m.NewProjectPage })));
@@ -56,6 +58,25 @@ function AppRoutes() {
               <RegisterPage />
             </AuthLayout>
           </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/auth/forgot-password"
+        element={
+          <PublicOnlyRoute>
+            <AuthLayout>
+              <ForgotPasswordPage />
+            </AuthLayout>
+          </PublicOnlyRoute>
+        }
+      />
+      {/* Pas de PublicOnlyRoute : le lien email ouvre une session de récupération. */}
+      <Route
+        path="/auth/reset-password"
+        element={
+          <AuthLayout>
+            <ResetPasswordPage />
+          </AuthLayout>
         }
       />
       <Route

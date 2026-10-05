@@ -4,6 +4,7 @@ import {
   FileText, Table, Trash2, Eye, CheckCircle2,
   AlertTriangle, XCircle, Loader2,
 } from 'lucide-react';
+import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Dataset } from '@/types';
@@ -170,7 +171,7 @@ export function DataTab({ projectId }: { projectId: string }) {
       setDatasets(prev => [data as Dataset, ...prev]);
       setShowUpload(false);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : (lang === 'fr' ? 'Échec de l\'import' : 'Upload failed'));
+      setUploadError(friendlyError(err, lang === 'fr' ? 'Échec de l\'import' : 'Upload failed', t));
     } finally {
       setUploading(false);
     }

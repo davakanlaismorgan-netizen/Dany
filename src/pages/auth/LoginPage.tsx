@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/context/I18nContext';
@@ -8,6 +8,7 @@ export default function LoginPage() {
   const { signIn } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,7 +24,9 @@ export default function LoginPage() {
     if (err) {
       setError(err);
     } else {
-      navigate('/dashboard');
+      // Retour à la page demandée (ex. /pricing), uniquement vers un chemin interne.
+      const from = (location.state as { from?: unknown } | null)?.from;
+      navigate(typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/dashboard');
     }
   };
 
@@ -77,14 +80,10 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm text-neutral-600">
-            <input type="checkbox" className="rounded border-neutral-300 text-savanna-600 focus:ring-savanna-400" />
-            {t('auth.login.remember')}
-          </label>
-          <a href="#" className="text-sm text-savanna-600 hover:text-savanna-700 font-medium">
+        <div className="flex justify-end">
+          <Link to="/auth/forgot-password" className="text-sm text-savanna-600 hover:text-savanna-700 font-medium">
             {t('auth.login.forgot')}
-          </a>
+          </Link>
         </div>
 
         <button type="submit" disabled={loading} className="btn-primary w-full">

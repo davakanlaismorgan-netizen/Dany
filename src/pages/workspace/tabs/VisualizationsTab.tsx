@@ -8,6 +8,7 @@ import {
   BarChart3, TrendingUp, PieChart as PieIcon, ScatterChart as ScatterIcon,
   AreaChart as AreaIcon, Map, Save, Trash2, Loader2,
 } from 'lucide-react';
+import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { EmptyState } from '@/components/ui/Loading';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ export function VisualizationsTab({ projectId }: { projectId: string }) {
   const [viz, setViz] = useState<typeof chartTypes[0] | null>(null);
   const [savedVizList, setSavedVizList] = useState<{ id: string; name: string; type: string; config: Record<string, unknown> }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,20 +70,22 @@ export function VisualizationsTab({ projectId }: { projectId: string }) {
   const handleSaveViz = useCallback(async () => {
     if (!viz) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const name = `${t(viz.labelKey)} — ${new Date().toLocaleDateString()}`;
-      const { data } = await supabase.from('visualizations').insert({
+      const { data, error } = await supabase.from('visualizations').insert({
         project_id: projectId,
         name,
         chart_type: viz.type,
         config: {},
       }).select().single();
+      if (error) throw error;
       if (data) {
         setSavedVizList(prev => [{ id: data.id, name, type: viz.type, config: {} }, ...prev]);
         setViz(null);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setSaveError(friendlyError(err, t('viz.save.error'), t));
     } finally {
       setSaving(false);
     }
@@ -134,6 +138,9 @@ export function VisualizationsTab({ projectId }: { projectId: string }) {
       </div>
 
       {/* Chart preview */}
+      {saveError && (
+        <div role="alert" className="p-3 rounded-xl bg-clay-50 border border-clay-200 text-sm text-clay-700">{saveError}</div>
+      )}
       {viz && <ChartPreview type={viz.type} t={t} onSave={handleSaveViz} saving={saving} />}
 
       {/* Saved visualizations */}

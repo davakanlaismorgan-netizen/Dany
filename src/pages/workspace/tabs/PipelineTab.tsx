@@ -276,7 +276,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
 
         {showCode ? (
           <div className="flex-1 bg-neutral-900 p-6 overflow-auto scrollbar-thin font-mono text-sm text-neutral-300">
-            <pre className="whitespace-pre-wrap">{`# Danysia Auto-generated Pipeline
+            <pre className="whitespace-pre-wrap">{`# DAS Auto-generated Pipeline
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split

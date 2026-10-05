@@ -25,7 +25,7 @@ const suggestedPrompts = [
 
 const mockResponses: Record<string, { content: string; insights?: { type: string; text: string }[] }> = {
   default: {
-    content: "I'm Danysia AI, your data science assistant. I can help you analyze data, build models, generate insights, and answer questions about your projects. What would you like to explore?",
+    content: "I'm DAS AI, your data science assistant. I can help you analyze data, build models, generate insights, and answer questions about your projects. What would you like to explore?",
   },
   sales: {
     content: "Based on your Lagos Retail Sales dataset, I've identified the key factors behind the 23% Q3 sales decline:\n\n1. **Seasonal dip**: August-September corresponds to the post-harvest low season in Lagos markets, historically showing 15-20% lower demand.\n\n2. **Reduced foot traffic**: Transaction count dropped 18% compared to Q2, suggesting fewer store visits.\n\n3. **Currency pressure**: NGN depreciation against USD increased import costs, leading to higher prices and reduced purchasing power.\n\n**Recommendation**: Focus on promotions for essential goods and consider inventory rebalancing for Q4 holiday demand.",

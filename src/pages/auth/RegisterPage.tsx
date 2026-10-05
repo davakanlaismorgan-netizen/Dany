@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, AlertCircle, Eye, EyeOff, Building2 } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle, Eye, EyeOff, Building2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/context/I18nContext';
 
@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agree, setAgree] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,14 +26,33 @@ export default function RegisterPage() {
     }
     setError('');
     setLoading(true);
-    const { error: err } = await signUp(email, password, fullName, company);
+    const { error: err, needsEmailConfirmation } = await signUp(email, password, fullName, company);
     setLoading(false);
     if (err) {
       setError(err);
+    } else if (needsEmailConfirmation) {
+      setConfirmationSent(true);
     } else {
       navigate('/dashboard');
     }
   };
+
+  if (confirmationSent) {
+    return (
+      <div>
+        <div role="status" className="flex items-start gap-3 p-4 rounded-xl bg-forest-50 border border-forest-200">
+          <CheckCircle2 className="w-5 h-5 text-forest-600 shrink-0 mt-0.5" />
+          <div>
+            <h2 className="font-semibold text-forest-900">{t('auth.register.confirm.title')}</h2>
+            <p className="mt-1 text-sm text-forest-800">{t('auth.register.confirm.desc')}</p>
+          </div>
+        </div>
+        <Link to="/auth/login" className="mt-6 inline-block text-sm text-savanna-600 hover:text-savanna-700 font-semibold">
+          {t('auth.register.signin')}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -100,7 +120,7 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
               className="input-field pl-10 pr-10"
               placeholder={t('auth.register.password')}
             />

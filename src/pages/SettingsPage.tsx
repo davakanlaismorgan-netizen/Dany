@@ -2,14 +2,16 @@ import { useState } from 'react';
 import {
   User, Building2, Mail, Phone, Globe, CreditCard, Users,
   Bell, Shield, Save, Check, Crown, Zap, Plus, Trash2,
-  Lock, LogOut, AlertTriangle, Loader2, CheckCircle2, AlertCircle,
+  Lock, LogOut, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n, type Language } from '@/context/I18nContext';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { openPaymentWidget, verifyTransaction } from '@/lib/kkiapay';
+import { useCheckout } from '@/hooks/useCheckout';
+import { CheckoutBanner } from '@/components/CheckoutBanner';
+import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 
 const tabs = [
   { id: 'profile', labelKey: 'settings.profile', icon: User },
@@ -42,7 +44,7 @@ const countries = [
 
 export default function SettingsPage() {
   const { t, lang, setLang } = useI18n();
-  const { profile, user, signOut, refreshProfile } = useAuth();
+  const { profile, user, signOut, refreshProfile, planExpiresAt } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [fullName, setFullName] = useState(profile?.full_name || '');
@@ -62,6 +64,7 @@ export default function SettingsPage() {
   // Delete account state
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   // Notification prefs state
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
@@ -72,8 +75,7 @@ export default function SettingsPage() {
 
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const [paying, setPaying] = useState(false);
-  const [payStatus, setPayStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
+  const checkout = useCheckout();
 
   const handleSave = async () => {
     setSaving(true);
@@ -97,8 +99,8 @@ export default function SettingsPage() {
 
   const handleChangePassword = async () => {
     setPasswordError(null);
-    if (newPassword.length < 6) {
-      setPasswordError(t('settings.security.password') + ' — min 6 characters');
+    if (newPassword.length < 8) {
+      setPasswordError(t('auth.reset.tooshort'));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -122,6 +124,7 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
+    setDeleteError(false);
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`;
       const { data: { session } } = await supabase.auth.getSession();
@@ -131,6 +134,7 @@ export default function SettingsPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
+        body: JSON.stringify({ confirm: true }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -139,37 +143,12 @@ export default function SettingsPage() {
       await signOut();
       navigate('/');
     } catch {
+      setDeleteError(true);
       setDeleting(false);
     }
   };
 
-  const handleUpgrade = () => {
-    setPaying(true);
-    setPayStatus('idle');
-
-    openPaymentWidget({
-      amount: 2900,
-      plan: 'premium',
-      email: user?.email,
-      fullname: profile?.full_name ?? undefined,
-      phone: phone || undefined,
-      onSuccess: async (transactionId) => {
-        setPayStatus('verifying');
-        try {
-          await verifyTransaction(transactionId, 'premium');
-          await refreshProfile();
-          setPayStatus('success');
-        } catch {
-          setPayStatus('error');
-        }
-        setPaying(false);
-      },
-      onFailed: () => {
-        setPayStatus('error');
-        setPaying(false);
-      },
-    });
-  };
+  const handleUpgrade = () => checkout.start({ phone: phone || undefined });
 
   const handleSaveNotifs = async () => {
     setNotifSaving(true);
@@ -349,13 +328,11 @@ export default function SettingsPage() {
                     <p className="text-sm text-white/80 mb-3">{t('settings.upgrade.desc')}</p>
                     <button
                       onClick={handleUpgrade}
-                      disabled={paying || payStatus === 'verifying'}
+                      disabled={checkout.busy}
                       className="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
                     >
-                      {paying && payStatus === 'idle' && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {payStatus === 'verifying' && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {!paying && payStatus !== 'verifying' && <Crown className="w-4 h-4" />}
-                      {payStatus === 'verifying' ? t('pricing.pay.verifying') : t('pricing.pay.now')}
+                      {checkout.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                      {checkout.status === 'verifying' ? t('pricing.pay.verifying') : t('pricing.pay.now')}
                     </button>
                   </div>
                 ) : (
@@ -363,25 +340,22 @@ export default function SettingsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-semibold text-neutral-900 capitalize">{profile?.plan} Plan</p>
-                        <p className="text-sm text-neutral-500">$29/month</p>
+                        <p className="text-sm text-neutral-500">
+                          {formatXof(PREMIUM_PRICE_XOF, lang)}{t('pricing.month')}
+                          {planExpiresAt && ` · ${t('settings.plan.valid_until')} ${new Date(planExpiresAt).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US')}`}
+                        </p>
                       </div>
-                      <button className="btn-secondary text-sm">{t('settings.currentplan')}</button>
+                      <button onClick={handleUpgrade} disabled={checkout.busy} className="btn-secondary text-sm">
+                        {checkout.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                        {t('settings.plan.renew')}
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {payStatus === 'success' && (
-                <div className="p-4 rounded-xl bg-forest-50 border border-forest-200 flex items-center gap-3 animate-fade-in">
-                  <CheckCircle2 className="w-5 h-5 text-forest-600 shrink-0" />
-                  <p className="text-sm text-forest-800">{t('pricing.pay.success')}</p>
-                </div>
-              )}
-              {payStatus === 'error' && (
-                <div className="p-4 rounded-xl bg-clay-50 border border-clay-200 flex items-center gap-3 animate-fade-in">
-                  <AlertCircle className="w-5 h-5 text-clay-600 shrink-0" />
-                  <p className="text-sm text-clay-700">{t('pricing.pay.failed')}</p>
-                </div>
+              {['success', 'failed', 'unverified', 'already_used'].includes(checkout.status) && (
+                <CheckoutBanner status={checkout.status} reference={checkout.reference} onRetry={checkout.retry} />
               )}
 
               {/* Payment methods */}
@@ -598,6 +572,7 @@ export default function SettingsPage() {
               <div className="card p-6">
                 <h2 className="font-semibold text-neutral-900 mb-1">{t('settings.security.danger')}</h2>
                 <p className="text-sm text-neutral-500 mb-4">{t('settings.security.danger.desc')}</p>
+                {deleteError && <p role="alert" className="mb-3 text-sm text-clay-600">{t('settings.security.delete.error')}</p>}
                 <div className="flex gap-3">
                   <button onClick={() => signOut()} className="btn-secondary text-clay-600 hover:bg-clay-50">
                     <LogOut className="w-4 h-4" /> {t('settings.security.signout')}
