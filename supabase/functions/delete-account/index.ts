@@ -1,61 +1,35 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { removeAllUnder } from "../_shared/storage.ts";
+import { handleDelete } from "./handler.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
-  }
-
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing auth header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
-
-    if (deleteError) {
-      return new Response(JSON.stringify({ error: deleteError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+const url = Deno.env.get("SUPABASE_URL")!;
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+  auth: { persistSession: false },
 });
+
+// Les paiements sont conservés pour la comptabilité (payments.user_id passe à NULL).
+Deno.serve((req) =>
+  handleDelete(req, {
+    env: (k) => Deno.env.get(k),
+    getUserId: async (authHeader) => {
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false },
+      });
+      const { data, error } = await userClient.auth.getUser();
+      return error || !data.user ? null : data.user.id;
+    },
+    removeUserFiles: async (userId) => {
+      for (const bucket of ["datasets", "reports", "avatars"]) {
+        const err = await removeAllUnder(admin.storage.from(bucket), userId);
+        if (err) return `${bucket}: ${err}`;
+      }
+      return null;
+    },
+    deleteUser: async (userId) => {
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      return error?.message ?? null;
+    },
+  })
+);
