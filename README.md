@@ -1,11 +1,12 @@
-# Danysia
+# DAS
 
-[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-sphkvpa6)
+Plateforme de data science : projets, jeux de données, pipelines, modèles, visualisations, rapports.
+Front : Vite + React 18 + TypeScript + Tailwind. Backend : Supabase (Postgres + RLS, Auth, Storage, Edge Functions).
+Paiement : KKiaPay (mobile money et carte, en FCFA). Hébergement : Vercel.
 
-Plateforme de data science (projets, jeux de données, pipelines, modèles, visualisations, rapports).
-Front : Vite + React 18 + TypeScript + Tailwind. Backend : Supabase (Postgres + RLS, Storage, Edge Functions). Paiement : KKiaPay.
+**Mise en service complète : [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).**
 
-## Démarrage
+## Démarrage local
 
 ```bash
 cp .env.example .env   # puis renseigner les valeurs
@@ -20,21 +21,22 @@ npm run dev
 | `npm run lint` | ESLint |
 | `npm run typecheck` | vérification TypeScript |
 
-## Variables d'environnement
+## Organisation
 
-Front (fichier `.env`, voir `.env.example`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_KKIAPAY_PUBLIC_KEY`, `VITE_KKIAPAY_SANDBOX`.
+- `src/` : application React (pages, composants, hooks, contextes)
+- `supabase/migrations/` : schéma de la base, à appliquer avec `supabase db push`
+- `supabase/functions/` : fonctions serveur (`verify-kkiapay`, `kkiapay-webhook`, `delete-account`)
+- `supabase/tests/` : tests de sécurité de la base ; `supabase/functions/**/*.test.ts` : tests des fonctions
+- `docs/DEPLOIEMENT.md` : guide Supabase, KKiaPay, Vercel
 
-Edge Functions (secrets Supabase, jamais dans le dépôt) :
+## Principes de sécurité
 
-- `KKIAPAY_PRIVATE_KEY`, `KKIAPAY_PUBLIC_KEY`, `KKIAPAY_SECRET_KEY`
-- `KKIAPAY_SANDBOX` : **doit valoir `false` en production**. Toute autre valeur (ou l'absence de la variable) fait vérifier les paiements sur l'environnement de test.
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement par Supabase.
-
-## Base de données
-
-Les migrations sont dans `supabase/migrations/` et s'appliquent dans l'ordre des noms de fichiers.
-Toute évolution de schéma passe par une nouvelle migration, jamais par une modification manuelle de la production.
+- Un utilisateur ne peut jamais écrire son propre abonnement ni ses paiements : seules les fonctions serveur
+  (clé `service_role`) activent un plan, à partir du montant réellement payé chez KKiaPay.
+- Une transaction KKiaPay ne peut servir qu'une seule fois (contrainte d'unicité en base).
+- Aucune clé secrète dans le dépôt ni dans les variables `VITE_` : celles-ci sont publiques.
 
 ## Intégration continue
 
-Chaque pull request exécute lint, typecheck et build (`.github/workflows/ci.yml`).
+Chaque pull request exécute lint, typecheck, build, les tests des fonctions (Deno) et les tests de sécurité
+de la base (PostgreSQL 16) : `.github/workflows/ci.yml`.

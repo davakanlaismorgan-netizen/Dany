@@ -1,0 +1,105 @@
+# DAS — Guide de mise en service
+
+Ce guide remplace l'hébergement géré par Bolt : votre propre Supabase (base, auth, fichiers, fonctions),
+Vercel pour le site, KKiaPay pour les paiements. Comptez environ une heure la première fois.
+
+Architecture : le navigateur parle à Supabase (RLS) ; les paiements passent par deux fonctions serveur
+(`verify-kkiapay`, `kkiapay-webhook`) qui sont les **seules** à pouvoir activer un abonnement.
+
+## 1. Supabase
+
+1. Créez un projet sur supabase.com. Notez l'**URL**, la clé **anon** et la **référence du projet**
+   (Project Settings > API / General). La clé `service_role` ne va jamais dans le front ni dans Vercel.
+2. Appliquez le schéma (4 commandes, depuis ce dépôt, Node 20+) :
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref <REFERENCE>
+   npx supabase db push
+   ```
+   Vérifiez dans le Table Editor que les tables `profiles`, `subscriptions`, `payments`… existent et que
+   les buckets `datasets`, `avatars`, `reports` sont créés (Storage).
+3. **Authentication > URL Configuration** :
+   - Site URL : `https://<votre-domaine>`
+   - Redirect URLs : `https://<votre-domaine>/dashboard`, `https://<votre-domaine>/auth/reset-password`,
+     et `http://localhost:5173/**` pour le développement.
+4. **Authentication** : conservez la confirmation d'email activée, fixez la longueur minimale du mot de
+   passe à 8, et configurez un **SMTP personnalisé** pour la production (le service d'email par défaut de
+   Supabase est limité et ne convient pas à de vrais utilisateurs).
+5. Secrets des fonctions (valeurs KKiaPay à l'étape 2) :
+   ```bash
+   npx supabase secrets set \
+     KKIAPAY_PUBLIC_KEY=... KKIAPAY_PRIVATE_KEY=... KKIAPAY_SECRET_KEY=... \
+     KKIAPAY_WEBHOOK_SECRET=<une longue valeur aléatoire que vous choisissez> \
+     KKIAPAY_SANDBOX=true \
+     ALLOWED_ORIGINS=https://<votre-domaine>,http://localhost:5173
+   npx supabase functions deploy verify-kkiapay
+   npx supabase functions deploy kkiapay-webhook --no-verify-jwt
+   npx supabase functions deploy delete-account
+   ```
+
+## 2. KKiaPay
+
+1. Dans le tableau de bord KKiaPay, récupérez les clés **publique, privée et secrète** (celles du mode
+   test d'abord).
+2. Webhook : URL `https://<REFERENCE>.supabase.co/functions/v1/kkiapay-webhook`, avec comme « secret hash »
+   exactement la valeur de `KKIAPAY_WEBHOOK_SECRET`.
+3. Testez entièrement en bac à sable avant de passer en production (étape 5).
+
+## 3. Vercel
+
+1. *Add New > Project*, importez le dépôt GitHub. Vercel détecte Vite ; `vercel.json` gère le routage
+   (sans lui, rafraîchir `/dashboard` renverrait une erreur 404).
+2. Variables d'environnement (voir `.env.example`) : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+   `VITE_KKIAPAY_PUBLIC_KEY`, `VITE_KKIAPAY_SANDBOX=true`, `VITE_CONTACT_EMAIL`.
+3. Déployez. Les variables `VITE_` sont figées à la compilation : toute modification demande un redéploiement.
+4. Quand le domaine est connu, mettez à jour `ALLOWED_ORIGINS` (secrets Supabase) et les URL de l'étape 1.3.
+
+## 4. Recette (à faire en bac à sable, dans l'ordre)
+
+- Inscription, clic sur le lien de confirmation reçu par email, connexion.
+- « Mot de passe oublié » : email reçu, nouveau mot de passe accepté.
+- Plan gratuit : le 4e projet est refusé avec un message clair.
+- Paiement Premium (bac à sable) : le plan passe à Premium avec une date de fin ; le 4e projet est accepté.
+- Fermez l'onglet juste après avoir payé : le plan doit quand même s'activer (webhook).
+- Page Tarifs déconnecté : le bouton de paiement renvoie vers la connexion.
+- Suppression du compte : le compte et ses fichiers disparaissent.
+
+## 5. Passage en production
+
+1. Remplacez les clés KKiaPay par celles de production (`supabase secrets set ...`).
+2. Retirez `KKIAPAY_SANDBOX` (ou mettez `false`) côté Supabase, et mettez `VITE_KKIAPAY_SANDBOX=false` côté Vercel.
+3. Redéployez le site. Les transactions de test et de production sont enregistrées sous des fournisseurs
+   distincts (`kkiapay-sandbox` / `kkiapay`) et ne peuvent pas se mélanger.
+
+## 6. Exploitation
+
+Accorder le plan Entreprise à un client (SQL Editor de Supabase) :
+```sql
+update public.subscriptions
+   set plan = 'enterprise', status = 'active', current_period_end = null
+ where user_id = (select id from auth.users where email = 'client@exemple.com');
+```
+Voir les paiements : `select * from public.payments order by created_at desc;`
+
+## 7. Tests
+
+```bash
+# Fonctions serveur (Deno 2) : logique de paiement, webhook, suppression de compte
+cd supabase/functions && deno test --no-prompt -A
+
+# Sécurité de la base (PostgreSQL 16 local) : tentatives d'attaque qui doivent toutes échouer
+psql -d <base_vide> -f supabase/tests/local-stubs.sql
+psql -d <base_vide> -f supabase/migrations/20261005090000_das_init.sql
+psql -d <base_vide> -v ON_ERROR_STOP=1 -f supabase/tests/security.test.sql
+```
+`local-stubs.sql` simule Supabase sur un PostgreSQL ordinaire : ne l'exécutez jamais sur un vrai projet.
+La CI exécute ces deux suites à chaque pull request.
+
+## 8. Limites connues
+
+- L'assistant IA, l'AutoML, les pipelines et la génération de rapports sont des **simulations** dans l'interface :
+  ils ne traitent pas encore les données réelles.
+- Les moyens de paiement et les compteurs d'usage affichés dans Paramètres > Facturation sont des valeurs d'exemple.
+- La limite de 10 000 lignes du plan gratuit s'appuie sur le nombre de lignes déclaré par le navigateur.
+- Pas de politique CSP : à ajouter après un test avec le widget KKiaPay.
+- Aucun test automatisé de l'interface.
