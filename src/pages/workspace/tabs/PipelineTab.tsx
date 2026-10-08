@@ -1,3 +1,4 @@
+import { onActivate } from '@/lib/a11y';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Database, Filter, BarChart3, Sparkles, FileOutput, Download,
@@ -311,8 +312,11 @@ results = pd.DataFrame({"actual": y_test, "predicted": y_pred})
 results.to_csv("output/predictions.csv", index=False)`}</pre>
           </div>
         ) : (
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- surface de glisser-déposer à la souris ; fonction de démonstration, chaque nœud reste atteignable au clavier
           <div
             ref={canvasRef}
+            role="application"
+            aria-label="Pipeline"
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
@@ -359,6 +363,10 @@ results.to_csv("output/predictions.csv", index=False)`}</pre>
               return (
                 <div
                   key={node.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={node.label}
+                  onKeyDown={onActivate(() => setSelectedNode(node.id))}
                   onMouseDown={(e) => handleNodeDragStart(e, node.id)}
                   onClick={() => setSelectedNode(node.id)}
                   className={cn(

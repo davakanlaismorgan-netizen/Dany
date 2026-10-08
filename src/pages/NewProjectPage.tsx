@@ -119,7 +119,7 @@ export function NewProjectPage() {
           <div className="space-y-5 animate-fade-in">
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1.5">{t('newproject.name')}</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder={t('newproject.name.placeholder')} autoFocus />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder={t('newproject.name.placeholder')} />
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1.5">{t('newproject.description')} <span className="text-neutral-400">{t('newproject.description.optional')}</span></label>

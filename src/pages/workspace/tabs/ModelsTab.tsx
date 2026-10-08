@@ -1,3 +1,4 @@
+import { onActivate } from '@/lib/a11y';
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -221,7 +222,10 @@ export function ModelsTab({ projectId }: { projectId: string }) {
             return (
               <div
                 key={model.id}
+                role={model.status === 'completed' ? 'button' : undefined}
+                tabIndex={model.status === 'completed' ? 0 : undefined}
                 onClick={() => model.status === 'completed' && setSelectedModel(selectedModel?.id === model.id ? null : model)}
+                onKeyDown={onActivate(() => model.status === 'completed' && setSelectedModel(selectedModel?.id === model.id ? null : model))}
                 className={cn('card p-5', model.status === 'completed' && 'cursor-pointer card-hover')}
               >
                 <div className="flex items-start justify-between mb-3">

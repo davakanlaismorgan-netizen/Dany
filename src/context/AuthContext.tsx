@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Plan, Profile } from '@/types';
 
 interface AuthContextValue {
@@ -35,10 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     if (profileRes.error) {
-      console.error('Error loading profile:', profileRes.error);
+      reportError(profileRes.error, { where: 'loadProfile.profiles' });
       return;
     }
-    if (planRes.error) console.error('Error loading plan:', planRes.error);
+    if (planRes.error) reportError(planRes.error, { where: 'loadProfile.current_plan' });
 
     const rawPlan = planRes.data as string | null;
     const plan: Plan = rawPlan === 'premium' || rawPlan === 'enterprise' ? rawPlan : 'free';
@@ -46,34 +47,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPlanExpiresAt(plan === 'free' ? null : (subscriptionRes.data?.current_period_end as string | null) ?? null);
   }
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        loadProfile(s.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    }).catch(() => {
-      setLoading(false);
-    });
+  // Utilisateur dont le profil est déjà chargé : évite de tout recharger à chaque renouvellement
+  // de jeton ou retour sur l'onglet (événement SIGNED_IN répété par Supabase).
+  const loadedUserId = useRef<string | null>(null);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, s) => {
+  useEffect(() => {
+    let active = true;
+
+    // Source unique : onAuthStateChange émet INITIAL_SESSION au démarrage (avec ou sans session),
+    // ce qui rend un getSession() séparé inutile (il doublait toutes les requêtes).
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) {
-        (async () => {
-          await loadProfile(s.user.id);
-          setLoading(false);
-        })();
-      } else {
+
+      if (!s?.user) {
+        loadedUserId.current = null;
         setProfile(null);
+        setPlanExpiresAt(null);
         setLoading(false);
+        return;
       }
+      if (event !== 'USER_UPDATED' && loadedUserId.current === s.user.id) return;
+
+      const userId = s.user.id;
+      loadedUserId.current = userId;
+      // Aucun appel Supabase attendu dans ce callback (risque d'interblocage documenté par
+      // Supabase) : le chargement est planifié, et loading repasse toujours à false.
+      setTimeout(() => {
+        loadProfile(userId)
+          .catch((err) => reportError(err, { where: 'loadProfile' }))
+          .finally(() => { if (active) setLoading(false); });
+      }, 0);
     });
 
     return () => {
+      active = false;
       authListener.subscription.unsubscribe();
     };
   }, []);

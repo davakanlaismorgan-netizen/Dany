@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Check, Zap, Crown, Building2, CreditCard, Smartphone, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useAuth } from '@/context/AuthContext';
 import { useCheckout } from '@/hooks/useCheckout';
 import { CheckoutBanner } from '@/components/CheckoutBanner';
 import { LogoMark } from '@/components/LogoMark';
@@ -11,6 +12,7 @@ import { CONTACT_EMAIL } from '@/lib/config';
 export default function PricingPage() {
   const { t, lang } = useI18n();
   const checkout = useCheckout();
+  const { user, profile } = useAuth();
 
   const plans = [
     {
@@ -111,7 +113,10 @@ export default function PricingPage() {
                 )}>
                   <Icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
+                  {profile?.plan === plan.planKey && <span className="badge-neutral">{t('pricing.current')}</span>}
+                </div>
                 <p className="text-sm text-neutral-500 mt-1">{plan.desc}</p>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-4xl font-display font-bold text-neutral-900">{plan.price}</span>
@@ -127,7 +132,7 @@ export default function PricingPage() {
                 </ul>
 
                 {isFree ? (
-                  <Link to="/auth/register" className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
+                  user ? null : <Link to="/auth/register" className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
                     {plan.cta}
                   </Link>
                 ) : isEnterprise ? (
@@ -147,7 +152,7 @@ export default function PricingPage() {
                     className={cn('mt-8 w-full flex items-center justify-center gap-2', plan.highlight ? 'btn-primary' : 'btn-secondary')}
                   >
                     {checkout.busy && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {checkout.status === 'verifying' ? t('pricing.pay.verifying') : t('pricing.pay.now')}
+                    {checkout.status === 'verifying' ? t('pricing.pay.verifying') : profile?.plan === 'premium' ? t('settings.plan.renew') : t('pricing.pay.now')}
                   </button>
                 )}
               </div>

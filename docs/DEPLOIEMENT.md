@@ -1,5 +1,7 @@
 # DAS — Guide de mise en service
 
+Prérequis : Node.js 22 ou plus (24 recommandé ; Node 20 n'est plus supporté depuis le 30 avril 2026).
+
 Ce guide remplace l'hébergement géré par Bolt : votre propre Supabase (base, auth, fichiers, fonctions),
 Vercel pour le site, KKiaPay pour les paiements. Comptez environ une heure la première fois.
 

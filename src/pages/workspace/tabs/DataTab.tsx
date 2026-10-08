@@ -1,3 +1,4 @@
+import { onActivate } from '@/lib/a11y';
 import { useEffect, useState, useRef } from 'react';
 import {
   Upload, FileSpreadsheet, Link2, Database, Globe, Cloud,
@@ -262,9 +263,13 @@ export function DataTab({ projectId }: { projectId: string }) {
           />
 
           <div
+            role="button"
+            tabIndex={0}
+            aria-label={t('data.upload')}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
+            onKeyDown={onActivate(() => fileInputRef.current?.click())}
             className="border-2 border-dashed border-neutral-300 rounded-xl p-8 text-center hover:border-savanna-400 transition-colors cursor-pointer"
           >
             {uploading ? (

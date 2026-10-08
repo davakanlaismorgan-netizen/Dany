@@ -1,3 +1,4 @@
+import { onActivate } from '@/lib/a11y';
 import { useState } from 'react';
 import {
   Search, Download, Star, Landmark, ShoppingBag, Sprout,
@@ -75,7 +76,7 @@ export default function MarketplacePage() {
             const Icon = sectorIcons[tpl.sector] || Database;
             const color = sectorColors[tpl.sector] || 'neutral';
             return (
-              <div key={tpl.id} onClick={() => setSelected(selected === tpl.id ? null : tpl.id)} className="card card-hover p-5 cursor-pointer">
+              <div key={tpl.id} role="button" tabIndex={0} aria-pressed={selected === tpl.id} onClick={() => setSelected(selected === tpl.id ? null : tpl.id)} onKeyDown={onActivate(() => setSelected(selected === tpl.id ? null : tpl.id))} className="card card-hover p-5 cursor-pointer">
                 <div className="flex items-start justify-between mb-3">
                   <div className={cn(
                     'w-11 h-11 rounded-xl flex items-center justify-center',

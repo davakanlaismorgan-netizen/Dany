@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { I18nProvider } from '@/context/I18nContext';
@@ -159,9 +160,11 @@ export default function App() {
     <BrowserRouter>
       <I18nProvider>
         <AuthProvider>
-          <Suspense fallback={<FullPageLoader />}>
-            <AppRoutes />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<FullPageLoader />}>
+              <AppRoutes />
+            </Suspense>
+          </ErrorBoundary>
         </AuthProvider>
       </I18nProvider>
     </BrowserRouter>

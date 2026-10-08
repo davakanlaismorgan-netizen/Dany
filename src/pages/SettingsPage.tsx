@@ -358,71 +358,6 @@ export default function SettingsPage() {
                 <CheckoutBanner status={checkout.status} reference={checkout.reference} onRetry={checkout.retry} />
               )}
 
-              {/* Payment methods */}
-              <div className="card p-6">
-                <h2 className="font-semibold text-neutral-900 mb-4">{t('settings.payment.methods')}</h2>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200">
-                    <div className="w-10 h-10 rounded-lg bg-ocean-50 flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-ocean-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-neutral-800">Visa ending in 4242</p>
-                      <p className="text-xs text-neutral-400">Expires 12/2028</p>
-                    </div>
-                    <span className="badge-forest">Default</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200">
-                    <div className="w-10 h-10 rounded-lg bg-gold-50 flex items-center justify-center">
-                      <Phone className="w-5 h-5 text-gold-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-neutral-800">MTN Mobile Money</p>
-                      <p className="text-xs text-neutral-400">+221 77 123 4567</p>
-                    </div>
-                  </div>
-                  <button className="btn-secondary w-full mt-2">
-                    <Plus className="w-4 h-4" /> {t('settings.payment.add')}
-                  </button>
-                </div>
-              </div>
-
-              {/* Usage */}
-              <div className="card p-6">
-                <h2 className="font-semibold text-neutral-900 mb-4">{t('settings.usage')}</h2>
-                <div className="space-y-4">
-                  {[
-                    { label: t('app.projects'), used: 4, total: profile?.plan === 'free' ? 3 : Infinity, color: 'savanna' },
-                    { label: t('data.rows'), used: 186000, total: profile?.plan === 'free' ? 10000 : Infinity, color: 'ocean' },
-                    { label: t('viz.title'), used: 8, total: profile?.plan === 'free' ? 5 : Infinity, color: 'forest' },
-                    { label: 'API Calls', used: 1240, total: profile?.plan === 'free' ? 0 : Infinity, color: 'gold' },
-                  ].map((u) => {
-                    const pct = u.total === Infinity ? 15 : Math.min(100, (u.used / u.total) * 100);
-                    return (
-                      <div key={u.label}>
-                        <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="text-neutral-700">{u.label}</span>
-                          <span className="text-neutral-400">
-                            {u.used.toLocaleString()}{u.total !== Infinity ? ` / ${u.total.toLocaleString()}` : ''}
-                          </span>
-                        </div>
-                        <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full rounded-full',
-                              u.color === 'savanna' && 'bg-savanna-500',
-                              u.color === 'ocean' && 'bg-ocean-500',
-                              u.color === 'forest' && 'bg-forest-500',
-                              u.color === 'gold' && 'bg-gold-500',
-                            )}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           )}
 
@@ -497,11 +432,11 @@ export default function SettingsPage() {
                         type="checkbox"
                         checked={notifPrefs[n.key]}
                         onChange={(e) => setNotifPrefs(prev => ({ ...prev, [n.key]: e.target.checked }))}
+                        aria-label={t(n.labelKey)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-neutral-200 rounded-full peer peer-checked:bg-savanna-500 transition-colors">
-                        <div className="w-5 h-5 bg-white rounded-full shadow-sm transition-transform mt-0.5 ml-0.5 peer-checked:translate-x-5" />
-                      </div>
+                      {/* Le curseur est un pseudo-élément : l'ancien enfant ne pouvait pas réagir à peer-checked (il ne bougeait pas) */}
+                      <div className="relative w-11 h-6 bg-neutral-200 rounded-full peer-checked:bg-savanna-500 peer-focus-visible:ring-2 peer-focus-visible:ring-savanna-400 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:bg-white after:rounded-full after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
                     </label>
                   </div>
                 ))}

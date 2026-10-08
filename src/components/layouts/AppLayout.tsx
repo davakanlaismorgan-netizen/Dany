@@ -10,7 +10,7 @@ import {
   Menu,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
 import { useI18n, type Language } from '@/context/I18nContext';
@@ -31,6 +31,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Échap ferme le menu utilisateur et le panneau latéral mobile.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setUserMenuOpen(false);
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -110,7 +122,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
           {userMenuOpen && (
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+              <button type="button" tabIndex={-1} aria-label={t('a11y.close')} className="fixed inset-0 z-40 cursor-default" onClick={() => setUserMenuOpen(false)} />
               <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl border border-neutral-200 shadow-lg py-1 z-50">
                 <Link
                   to="/settings"
@@ -133,7 +145,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-neutral-900/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <button type="button" tabIndex={-1} aria-label={t('a11y.close')} className="fixed inset-0 bg-neutral-900/50 z-40 lg:hidden cursor-default" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main content */}
