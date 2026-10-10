@@ -34,7 +34,7 @@ describe('BillingDetails', () => {
     ui(true);
     await waitFor(() => expect(screen.getByText('TX-OK')).toBeTruthy());
     expect(screen.getByText(/TX-REF/).textContent).toContain('(test)');
-    expect(screen.getAllByText(/17[\s  ,]900 FCFA/).length).toBe(2);
+    expect(screen.getAllByText(/17[\s\u202f\u00a0,]900 FCFA/).length).toBe(2);
     const bars = screen.getAllByRole('progressbar');
     expect(bars).toHaveLength(3);
     expect(bars[0].getAttribute('aria-valuenow')).toBe('2');

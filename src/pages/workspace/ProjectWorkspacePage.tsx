@@ -5,6 +5,7 @@ import {
   ChevronRight, Landmark, ShoppingBag, Sprout, HeartPulse, Truck, Settings,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Project } from '@/types';
 import { sectorConfig } from '@/lib/sectors';
 import { FullPageLoader, ErrorState } from '@/components/ui/Loading';
@@ -55,7 +56,8 @@ export function ProjectWorkspacePage() {
         } else {
           setError(true);
         }
-      } catch {
+      } catch (err) {
+        reportError(err, { where: 'ProjectWorkspacePage.load#1' });
         setError(true);
       } finally {
         setLoading(false);

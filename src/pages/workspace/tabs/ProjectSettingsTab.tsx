@@ -26,7 +26,7 @@ export function ProjectSettingsTab({ projectId, project }: { projectId: string; 
     setError(null);
     const { error: err } = await supabase.from('projects').update({ name, description }).eq('id', projectId);
     if (err) {
-      reportError(err, { where: 'ProjectSettingsTab.save' });
+        reportError(err, { where: 'ProjectSettingsTab.save' });
       setError(friendlyError(err, t('common.error'), t));
     } else {
       setSaved(true);

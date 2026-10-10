@@ -7,6 +7,7 @@ import {
   Upload, Table, GitBranch, Layers, Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 import type { PipelineNode, PipelineEdge } from '@/types';
@@ -158,8 +159,8 @@ export function PipelineTab({ projectId }: { projectId: string }) {
       }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
-    } catch {
-      // ignore
+    } catch (err) {
+      reportError(err, { where: 'PipelineTab#1' });
     } finally {
       setSaving(false);
     }
@@ -216,7 +217,8 @@ export function PipelineTab({ projectId }: { projectId: string }) {
           await supabase.from('pipelines').update({ status: 'completed' }).eq('id', pipelineId);
         }
       }, 2000);
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'PipelineTab#2' });
       setRunning(false);
     }
   };

@@ -8,6 +8,7 @@ import {
 import { cn, timeAgo } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import { useAuth } from '@/context/AuthContext';
 
 interface Message {
@@ -184,8 +185,8 @@ export default function AssistantPage() {
       if (activeConvId === convId) {
         newConversation();
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      reportError(err, { where: 'AssistantPage#1' });
     } finally {
       setDeletingConvId(null);
     }

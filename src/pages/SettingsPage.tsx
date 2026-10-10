@@ -147,7 +147,8 @@ export default function SettingsPage() {
       }
       await signOut();
       navigate('/');
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'SettingsPage.deleteAccount#1' });
       setDeleteError(true);
       setDeleting(false);
     }

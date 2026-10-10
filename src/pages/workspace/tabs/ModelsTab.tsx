@@ -10,9 +10,10 @@ import {
   Brain, Target, Zap, Award, Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Model, Dataset } from '@/types';
 
-import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
+import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 
@@ -36,6 +37,8 @@ export function ModelsTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [showNewModel, setShowNewModel] = useState(false);
   const [modelForm, setModelForm] = useState({ name: '', taskType: 'classification', datasetId: '', targetColumn: '' });
@@ -48,16 +51,20 @@ export function ModelsTab({ projectId }: { projectId: string }) {
       setDatasets((data as Dataset[]) ?? []);
     }
     loadDatasets();
-  }, [projectId]);
+  }, [projectId, reloadKey]);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setLoadError(false);
       try {
         const { data, error } = await supabase.from('models').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
         if (error) throw error;
         setModels((data as Model[]) ?? []);
-      } catch {
+      } catch (err) {
+        reportError(err, { where: 'ModelsTab#1' });
         setModels([]);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -206,6 +213,8 @@ export function ModelsTab({ projectId }: { projectId: string }) {
         <div className="grid md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
+      ) : loadError ? (
+        <ErrorState message={t('common.error')} onRetry={() => setReloadKey((k) => k + 1)} />
       ) : models.length === 0 ? (
         <div className="card">
           <EmptyState
