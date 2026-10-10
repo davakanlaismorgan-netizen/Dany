@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useCheckout } from '@/hooks/useCheckout';
 import { collectUserData, downloadJson } from '@/lib/exportData';
 import { reportError } from '@/lib/report';
+import { BillingDetails } from '@/components/BillingDetails';
 import { CheckoutBanner } from '@/components/CheckoutBanner';
 import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 
@@ -377,6 +378,8 @@ export default function SettingsPage() {
               {['success', 'failed', 'unverified', 'already_used'].includes(checkout.status) && (
                 <CheckoutBanner status={checkout.status} reference={checkout.reference} onRetry={checkout.retry} />
               )}
+
+              <BillingDetails isFree={profile?.plan === 'free'} />
 
             </div>
           )}

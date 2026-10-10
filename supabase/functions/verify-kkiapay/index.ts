@@ -20,6 +20,11 @@ Deno.serve((req) =>
       const { data, error } = await userClient.auth.getUser();
       return error || !data.user ? null : data.user.id;
     },
+    allowAttempt: async (userId) => {
+      const { data, error } = await admin.rpc("register_verify_attempt", { p_user_id: userId, p_max: 10 });
+      if (error) throw new Error(error.message);
+      return data === true;
+    },
     activatePlan: async (a) => {
       const { data, error } = await admin.rpc("activate_plan", {
         p_user_id: a.userId,

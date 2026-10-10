@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { openPaymentWidget, verifyTransaction, VerifyError } from '@/lib/kkiapay';
 import { PREMIUM_PRICE_XOF } from '@/lib/plans';
+import { reportError } from '@/lib/report';
 
 export type CheckoutStatus =
   | 'idle'
@@ -30,7 +31,10 @@ export function useCheckout() {
     } catch (err) {
       if (err instanceof VerifyError && err.code === 'already_used') setStatus('already_used');
       else if (err instanceof VerifyError && ['payment_not_successful', 'amount_mismatch'].includes(err.code)) setStatus('failed');
-      else setStatus('unverified');
+      else {
+        reportError(err, { where: 'useCheckout.verify' });
+        setStatus('unverified');
+      }
     }
   }, [refreshProfile]);
 
@@ -54,7 +58,8 @@ export function useCheckout() {
         // Fermeture du widget sans paiement : on revient à l'état initial (sans écraser un succès).
         onClose: () => setStatus((s) => (s === 'paying' ? 'idle' : s)),
       });
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'useCheckout.open' });
       setStatus('failed');
     }
   }, [user, profile?.full_name, navigate, verify]);

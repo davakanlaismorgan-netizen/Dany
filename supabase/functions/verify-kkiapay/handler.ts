@@ -16,6 +16,8 @@ export interface VerifyDeps {
   // Renvoie l'identifiant de l'utilisateur authentifié par le jeton, ou null.
   getUserId: (authHeader: string) => Promise<string | null>;
   activatePlan: ActivatePlan;
+  // Limitation de débit par utilisateur : false si la limite est atteinte. Peut lever (échec = refus, voir ci-dessous).
+  allowAttempt: (userId: string) => Promise<boolean>;
 }
 
 // Appelée par le navigateur juste après le paiement. Le client n'envoie QUE la référence de
@@ -38,6 +40,21 @@ export async function handleVerify(req: Request, deps: VerifyDeps): Promise<Resp
   const transactionId = (body as { transactionId?: unknown } | null)?.transactionId;
   if (!isValidTransactionId(transactionId)) {
     return jsonResponse(cors, { verified: false, error: "invalid_request" }, 400);
+  }
+
+  // Avant tout appel à KKiaPay : un compte ne peut pas faire consommer l'API avec des références inventées.
+  let allowed: boolean;
+  try {
+    allowed = await deps.allowAttempt(userId);
+  } catch (e) {
+    console.error("verify-kkiapay: limitation de débit indisponible:", e);
+    return jsonResponse(cors, { verified: false, error: "server_error" }, 500); // on échoue fermé
+  }
+  if (!allowed) {
+    return new Response(JSON.stringify({ verified: false, error: "rate_limited" }), {
+      status: 429,
+      headers: { ...cors, "Content-Type": "application/json", "Retry-After": "600" },
+    });
   }
 
   const cfg = readConfig(deps.env);

@@ -18,6 +18,7 @@ function setup(over: Omit<Partial<VerifyDeps>, "env"> & { tx?: unknown; env?: Re
       return Promise.resolve(new Response(JSON.stringify(over.tx ?? { status: "SUCCESS", amount: 17900, source: "MOBILE_MONEY" })));
     },
     getUserId: over.getUserId ?? (() => Promise.resolve(USER)),
+    allowAttempt: over.allowAttempt ?? (() => Promise.resolve(true)),
     activatePlan: over.activatePlan ?? ((a) => { calls.push(a); return Promise.resolve({ expiresAt: "2026-11-05T00:00:00Z", error: null }); }),
   };
   return { deps, calls, urls };
@@ -122,4 +123,29 @@ Deno.test("CORS : origine autorisée uniquement, jamais « * »", async () => {
   assert.equal(ok.headers.get("Access-Control-Allow-Origin"), "https://das.example.com");
   const evil = await handleVerify(new Request("https://f/v", { method: "OPTIONS", headers: { Origin: "https://evil.com" } }), deps);
   assert.equal(evil.headers.get("Access-Control-Allow-Origin"), null);
+});
+
+Deno.test("limitation de débit : 429 + Retry-After, KKiaPay jamais appelé", async () => {
+  const { deps, urls, calls } = setup({ allowAttempt: () => Promise.resolve(false) });
+  const res = await handleVerify(post({ transactionId: "TX12345" }), deps);
+  assert.equal(res.status, 429);
+  assert.equal(res.headers.get("Retry-After"), "600");
+  assert.equal(await err(res), "rate_limited");
+  assert.equal(urls.length + calls.length, 0);
+});
+
+Deno.test("limitation de débit indisponible : on échoue fermé (500), rien n'est activé", async () => {
+  const { deps, urls, calls } = setup({ allowAttempt: () => Promise.reject(new Error("db down")) });
+  const res = await handleVerify(post({ transactionId: "TX12345" }), deps);
+  assert.equal(res.status, 500);
+  assert.equal(urls.length + calls.length, 0);
+});
+
+Deno.test("la limitation s'applique par utilisateur authentifié, après authentification", async () => {
+  const seen: string[] = [];
+  const { deps } = setup({ allowAttempt: (u) => { seen.push(u); return Promise.resolve(true); } });
+  await handleVerify(post({ transactionId: "TX12345" }, {}), deps); // sans jeton : 401, pas de compteur
+  assert.deepEqual(seen, []);
+  await handleVerify(post({ transactionId: "TX12345" }), deps);
+  assert.deepEqual(seen, [USER]);
 });

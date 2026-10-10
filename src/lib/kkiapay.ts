@@ -77,6 +77,7 @@ export type VerifyErrorCode =
   | 'amount_mismatch'
   | 'already_used'
   | 'provider_unavailable'
+  | 'rate_limited'
   | 'server_error'
   | 'network';
 
@@ -88,7 +89,7 @@ export class VerifyError extends Error {
 
 const KNOWN_CODES: VerifyErrorCode[] = [
   'unauthorized', 'invalid_request', 'payment_not_successful', 'amount_mismatch',
-  'already_used', 'provider_unavailable', 'server_error',
+  'already_used', 'provider_unavailable', 'rate_limited', 'server_error',
 ];
 
 // Demande au serveur de confirmer le paiement auprès de KKiaPay. Le client n'envoie que la

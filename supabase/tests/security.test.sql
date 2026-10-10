@@ -254,6 +254,44 @@ select tests.expect_fail('ATTAQUE: le client réécrit status', 'authenticated',
 select tests.expect_ok('légitime: le client renomme son dataset', 'authenticated', :A::uuid, 'a@test.dev',
   $q$update public.datasets set name = 'renommé' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$);
 
+-- ===== Remboursement et limitation de débit =====
+select tests.expect_ok('activate R1', 'service_role', null, null,
+  $q$select public.activate_plan('dddddddd-0000-0000-0000-00000000000d','premium','kkiapay','R1',17900,'XOF','momo',1)$q$);
+select tests.expect_val('avant remboursement: premium', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.current_plan()$q$, 'premium');
+select tests.expect_ok('revoke_payment R1', 'service_role', null, null, $q$select public.revoke_payment('kkiapay','R1')$q$);
+select tests.expect_val('après remboursement du seul mois: free', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.current_plan()$q$, 'free');
+select tests.expect_ok('activate R2', 'service_role', null, null,
+  $q$select public.activate_plan('dddddddd-0000-0000-0000-00000000000d','premium','kkiapay','R2',17900,'XOF','momo',1)$q$);
+select tests.expect_ok('activate R3', 'service_role', null, null,
+  $q$select public.activate_plan('dddddddd-0000-0000-0000-00000000000d','premium','kkiapay','R3',17900,'XOF','momo',1)$q$);
+select tests.expect_ok('revoke_payment R2', 'service_role', null, null, $q$select public.revoke_payment('kkiapay','R2')$q$);
+select tests.expect_ok('revoke_payment R2 rejoué (idempotent)', 'service_role', null, null, $q$select public.revoke_payment('kkiapay','R2')$q$);
+select tests.expect_val('R2 rejoué: un seul mois retiré (reste ~1 mois)', 'service_role', null, null,
+  $q$select current_period_end between now() + interval '27 days' and now() + interval '32 days' from public.subscriptions where user_id = 'dddddddd-0000-0000-0000-00000000000d'$q$, 'true');
+select tests.expect_val('encore premium avec le mois restant', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.current_plan()$q$, 'premium');
+select tests.expect_ok('revoke_payment R3', 'service_role', null, null, $q$select public.revoke_payment('kkiapay','R3')$q$);
+select tests.expect_val('tout remboursé: free', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.current_plan()$q$, 'free');
+select tests.expect_fail('revoke_payment: transaction inconnue', 'service_role', null, null,
+  $q$select public.revoke_payment('kkiapay','NOPE')$q$, 'unknown_payment');
+select tests.expect_fail('ATTAQUE: un client ne peut pas appeler revoke_payment', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.revoke_payment('kkiapay','R1')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: un client ne peut pas écrire refunded_at', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$update public.payments set refunded_at = null$q$, 'permission denied');
+select tests.expect_val('limite de débit: 3 tentatives autorisées', 'service_role', null, null,
+  $q$select (public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 3)::int + public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 3)::int + public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 3)::int)$q$, '3');
+select tests.expect_val('limite de débit: la 4e est refusée', 'service_role', null, null,
+  $q$select public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 3)$q$, 'false');
+select tests.expect_val('limite de débit: un autre utilisateur n''est pas affecté', 'service_role', null, null,
+  $q$select public.register_verify_attempt('eeeeeeee-0000-0000-0000-00000000000e', 3)$q$, 'true');
+select tests.expect_fail('ATTAQUE: un client ne peut pas appeler register_verify_attempt', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 1000)$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: un client ne peut pas lire verify_attempts', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
+  $q$select count(*) from public.verify_attempts$q$, 'permission denied');
+
 -- ===== Bilan =====
 select n, case when ok then 'PASS' else 'FAIL' end as resultat, label, case when ok then '' else detail end as detail
   from tests.results order by n;

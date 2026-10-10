@@ -6,3 +6,7 @@ export const PREMIUM_PRICE_XOF = 17900;
 export function formatXof(amount: number, lang: 'fr' | 'en'): string {
   return `${new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US').format(amount)} FCFA`;
 }
+
+// Limites du plan gratuit. À garder identiques à enforce_plan_limits() dans la migration SQL
+// (c'est la base qui fait foi ; un test vérifie la cohérence).
+export const FREE_LIMITS = { projects: 3, visualizations: 5, rows: 10000 } as const;
