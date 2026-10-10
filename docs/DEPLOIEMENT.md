@@ -114,3 +114,17 @@ Les pages `/legal/terms`, `/legal/privacy` et `/legal/notice` sont des **textes 
 ## Import de données (fonction `process-dataset`)
 
 Le navigateur envoie le fichier (CSV ou JSON, 50 Mo max) dans Storage puis appelle `process-dataset`, qui lit le fichier **stocké**, compte les lignes et calcule le profil des colonnes. Le client ne peut pas écrire `row_count`, `profiling` ni `status` (droits de colonnes dans la migration `20261007090000`) : la limite de 10 000 lignes du plan gratuit n'est donc pas contournable. Au-delà de 10 000 lignes en plan gratuit, la ligne et le fichier sont supprimés et l'utilisateur voit un message clair. Limite de traitement : 500 000 lignes / 500 colonnes. **Non testé sur un vrai projet Supabase** : surveillez le temps CPU de la fonction avec un gros fichier avant de promettre cette taille. Les fichiers Excel ne sont pas pris en charge (exporter en CSV).
+
+## Sécurité et exploitation (à faire côté Supabase / Vercel / GitHub)
+
+**En-têtes** (`vercel.json`) : HSTS, nosniff, anti-clickjacking, et une **Content-Security-Policy en mode rapport seulement** (`Content-Security-Policy-Report-Only`). Elle n'a pas pu être testée avec le widget KKiaPay réel : déployez, ouvrez la console du navigateur sur Tarifs > Payer, notez les violations signalées (domaines KKiaPay manquants, etc.), ajustez `vercel.json`, puis renommez l'en-tête en `Content-Security-Policy` pour l'appliquer.
+
+**Suivi des erreurs** : renseignez `VITE_ERROR_ENDPOINT` (URL HTTPS d'un collecteur JSON : tunnel Sentry, petite fonction à vous…). Chaque erreur inattendue est envoyée (au plus 5/minute, dédupliquée, sans email ni contenu de fichier). Sans cette variable, les erreurs restent dans la console du navigateur uniquement.
+
+**Environnements** : créez **deux projets Supabase** (staging et production) et deux jeux de variables Vercel (Preview = staging, Production = prod). Ne partagez jamais les clés KKiaPay sandbox/live ni la clé `service_role` entre eux.
+
+**Sauvegardes** : le plan gratuit Supabase n'inclut pas de sauvegardes restaurables ; activez les sauvegardes quotidiennes (plan Pro) avant d'accepter de vrais paiements, et exportez périodiquement avec `pg_dump`. Testez une restauration une fois.
+
+**GitHub** : Settings > Branches > règle sur `main` : PR obligatoire, les 3 jobs de CI (web, edge-functions, database) requis, pas de push direct. Activez Dependabot alerts et secret scanning.
+
+**Auth Supabase** : Authentication > URL Configuration (Site URL = votre domaine, Redirect URLs = `/auth/reset-password`), Providers > Email : confirmation d'email activée, SMTP personnalisé (le SMTP intégré est limité à quelques emails par heure), longueur minimale du mot de passe, protection contre les mots de passe fuités.
