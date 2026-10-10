@@ -10,6 +10,8 @@ import { useI18n, type Language } from '@/context/I18nContext';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useCheckout } from '@/hooks/useCheckout';
+import { collectUserData, downloadJson } from '@/lib/exportData';
+import { reportError } from '@/lib/report';
 import { CheckoutBanner } from '@/components/CheckoutBanner';
 import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 
@@ -65,6 +67,8 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
 
   // Notification prefs state
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
@@ -145,6 +149,22 @@ export default function SettingsPage() {
     } catch {
       setDeleteError(true);
       setDeleting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!user) return;
+    setExporting(true);
+    setExportError(false);
+    try {
+      const data = await collectUserData(user.id);
+      downloadJson(`das-export-${new Date().toISOString().slice(0, 10)}.json`, data);
+      if (data.errors.length > 0) setExportError(true);
+    } catch (err) {
+      reportError(err, { where: 'exportData' });
+      setExportError(true);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -504,6 +524,14 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="card p-6">
+                <h2 className="font-semibold text-neutral-900 mb-1">{t('settings.export.title')}</h2>
+                <p className="text-sm text-neutral-500 mb-4">{t('settings.export.desc')}</p>
+                {exportError && <p role="alert" className="mb-3 text-sm text-clay-600">{t('settings.export.error')}</p>}
+                <button type="button" onClick={handleExport} disabled={exporting} className="btn-secondary">
+                  {exporting ? t('settings.export.busy') : t('settings.export.button')}
+                </button>
+              </div>
               <div className="card p-6">
                 <h2 className="font-semibold text-neutral-900 mb-1">{t('settings.security.danger')}</h2>
                 <p className="text-sm text-neutral-500 mb-4">{t('settings.security.danger.desc')}</p>

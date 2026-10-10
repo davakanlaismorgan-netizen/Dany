@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/report';
+import { LEGAL_VERSION } from '@/lib/legalContent';
 import type { Plan, Profile } from '@/types';
 
 interface AuthContextValue {
@@ -91,7 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        data: { full_name: fullName, company: company || undefined },
+        // accepted_terms/terms_version : le serveur horodate l'acceptation (profiles.terms_accepted_at)
+        data: { full_name: fullName, company: company || undefined, accepted_terms: true, terms_version: LEGAL_VERSION },
         emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });

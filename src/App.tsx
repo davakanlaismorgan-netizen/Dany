@@ -21,6 +21,7 @@ const MarketplacePage = lazy(() => import('@/pages/MarketplacePage'));
 const PricingPage = lazy(() => import('@/pages/PricingPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+const LegalPage = lazy(() => import('@/pages/legal/LegalPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -150,6 +151,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/legal/:slug" element={<LegalPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

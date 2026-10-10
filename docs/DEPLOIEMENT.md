@@ -105,3 +105,7 @@ La CI exécute ces deux suites à chaque pull request.
 - La limite de 10 000 lignes du plan gratuit s'appuie sur le nombre de lignes déclaré par le navigateur.
 - Pas de politique CSP : à ajouter après un test avec le widget KKiaPay.
 - Aucun test automatisé de l'interface.
+
+## Pages légales
+
+Les pages `/legal/terms`, `/legal/privacy` et `/legal/notice` sont des **textes de travail** et affichent un bandeau « version provisoire ». Renseignez `VITE_COMPANY_NAME`, `VITE_COMPANY_ADDRESS`, `VITE_COMPANY_REGISTRATION`, `VITE_CONTACT_EMAIL`, faites relire les textes par un juriste, puis passez `VITE_LEGAL_REVIEWED=true` (le build refuse si l'identité est incomplète). L'acceptation des CGU est horodatée côté base (`profiles.terms_accepted_at`).

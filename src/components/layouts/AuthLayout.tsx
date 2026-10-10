@@ -46,9 +46,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <p className="text-white/40 text-sm">
-            {t('auth.brand.trusted')}
-          </p>
         </div>
       </div>
 

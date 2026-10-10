@@ -217,6 +217,21 @@ select tests.expect_val('avatars: limite 2 Mo', 'postgres', null, null,
 select tests.expect_val('datasets: limite 50 Mo, privé', 'postgres', null, null,
   $q$select file_size_limit::text || public::text from storage.buckets where id = 'datasets'$q$, '52428800false');
 
+-- ===== Acceptation des CGU =====
+select tests.expect_fail('ATTAQUE: le client ne peut pas écrire terms_accepted_at', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.profiles set terms_accepted_at = now() where id = auth.uid()$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: le client ne peut pas écrire terms_version', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.profiles set terms_version = 'x' where id = auth.uid()$q$, 'permission denied');
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('dddddddd-0000-0000-0000-00000000000d', 'd@test.dev', '{"accepted_terms":"true","terms_version":"2026-10"}'),
+  ('eeeeeeee-0000-0000-0000-00000000000e', 'e@test.dev', '{}');
+select tests.expect_val('CGU acceptées: horodatage posé par le serveur', 'postgres', null, null,
+  $q$select (terms_accepted_at is not null)::text || terms_version from public.profiles where id = 'dddddddd-0000-0000-0000-00000000000d'$q$, 'true2026-10');
+select tests.expect_val('sans acceptation: aucun horodatage', 'postgres', null, null,
+  $q$select (terms_accepted_at is null)::text from public.profiles where id = 'eeeeeeee-0000-0000-0000-00000000000e'$q$, 'true');
+select tests.expect_fail('handle_new_user non appelable par un client', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select public.handle_new_user()$q$, 'permission denied');
+
 -- ===== Bilan =====
 select n, case when ok then 'PASS' else 'FAIL' end as resultat, label, case when ok then '' else detail end as detail
   from tests.results order by n;

@@ -1,0 +1,50 @@
+import { supabase } from '@/lib/supabase';
+
+// Tables contenant des données de l'utilisateur. La sécurité au niveau des lignes (RLS) garantit
+// que chaque requête ne renvoie que ses propres lignes.
+export const EXPORT_TABLES = [
+  'profiles', 'subscriptions', 'payments', 'projects', 'datasets', 'pipelines', 'models',
+  'visualizations', 'reports', 'ai_conversations', 'notification_preferences', 'team_members',
+  'activity_log',
+] as const;
+
+const PAGE_SIZE = 1000; // limite par requête de l'API
+
+export interface DataExport {
+  exported_at: string;
+  user_id: string;
+  tables: Record<string, unknown[]>;
+  // Tables qui n'ont pas pu être lues en entier (l'export reste utilisable pour les autres).
+  errors: string[];
+}
+
+async function readAll(table: string): Promise<{ rows: unknown[]; error: string | null }> {
+  const rows: unknown[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase.from(table).select('*').order('id').range(from, from + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message };
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) return { rows, error: null };
+  }
+}
+
+export async function collectUserData(userId: string): Promise<DataExport> {
+  const results = await Promise.all(EXPORT_TABLES.map(async (table) => ({ table, ...(await readAll(table)) })));
+  return {
+    exported_at: new Date().toISOString(),
+    user_id: userId,
+    tables: Object.fromEntries(results.map((r) => [r.table, r.rows])),
+    errors: results.filter((r) => r.error).map((r) => `${r.table}: ${r.error}`),
+  };
+}
+
+export function downloadJson(filename: string, data: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

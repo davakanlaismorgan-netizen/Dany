@@ -142,8 +142,8 @@ export default function RegisterPage() {
             className="rounded border-neutral-300 text-savanna-600 focus:ring-savanna-400 mt-0.5"
           />
           {t('auth.register.terms')}{' '}
-          <a href="#" className="text-savanna-600 hover:text-savanna-700 font-medium">{t('auth.register.terms.terms')}</a> {t('auth.register.terms.and')}{' '}
-          <a href="#" className="text-savanna-600 hover:text-savanna-700 font-medium">{t('auth.register.terms.privacy')}</a>
+          <Link to="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-savanna-600 hover:text-savanna-700 font-medium">{t('auth.register.terms.terms')}</Link> {t('auth.register.terms.and')}{' '}
+          <Link to="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-savanna-600 hover:text-savanna-700 font-medium">{t('auth.register.terms.privacy')}</Link>
         </label>
 
         <button type="submit" disabled={loading} className="btn-primary w-full">
