@@ -1,10 +1,9 @@
-import { onActivate } from '@/lib/a11y';
 import { useState } from 'react';
 import {
-  Search, Download, Star, Landmark, ShoppingBag, Sprout,
-  HeartPulse, Truck, Database, Check, ArrowRight,
+  Search, Info, Landmark, ShoppingBag, Sprout,
+  HeartPulse, Truck, Database,
 } from 'lucide-react';
-import { marketplaceTemplates } from '@/lib/mockData';
+import { marketplaceTemplates } from '@/lib/marketplaceCatalog';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 
@@ -22,7 +21,6 @@ export default function MarketplacePage() {
   const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const [selected, setSelected] = useState<string | null>(null);
 
   const filters = [
     { value: 'all', label: t('marketplace.all') },
@@ -48,6 +46,10 @@ export default function MarketplacePage() {
       <div>
         <h1 className="text-2xl font-display font-bold text-neutral-900">{t('marketplace.title')}</h1>
         <p className="text-neutral-500 mt-1">{t('marketplace.subtitle')}</p>
+      </div>
+
+      <div role="note" className="p-3 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800 flex items-start gap-2">
+        <Info className="w-4 h-4 mt-0.5 shrink-0" /> {t('demo.marketplace')}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -76,7 +78,7 @@ export default function MarketplacePage() {
             const Icon = sectorIcons[tpl.sector] || Database;
             const color = sectorColors[tpl.sector] || 'neutral';
             return (
-              <div key={tpl.id} role="button" tabIndex={0} aria-pressed={selected === tpl.id} onClick={() => setSelected(selected === tpl.id ? null : tpl.id)} onKeyDown={onActivate(() => setSelected(selected === tpl.id ? null : tpl.id))} className="card card-hover p-5 cursor-pointer">
+              <div key={tpl.id} className="card p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className={cn(
                     'w-11 h-11 rounded-xl flex items-center justify-center',
@@ -89,10 +91,6 @@ export default function MarketplacePage() {
                   )}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-neutral-500">
-                    <Star className="w-3.5 h-3.5 text-gold-500 fill-gold-500" />
-                    {tpl.rating}
-                  </div>
                 </div>
                 <h3 className="font-semibold text-neutral-900 mb-1">{tpl.name}</h3>
                 <p className="text-sm text-neutral-500 line-clamp-2 mb-3">{tpl.desc}</p>
@@ -101,36 +99,10 @@ export default function MarketplacePage() {
                     <span key={tag} className="badge-neutral">{tag}</span>
                   ))}
                 </div>
-                <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
-                  <span className="text-xs text-neutral-400 flex items-center gap-1">
-                    <Download className="w-3.5 h-3.5" /> {tpl.downloads.toLocaleString()} {t('marketplace.downloads')}
-                  </span>
-                  {selected === tpl.id ? (
-                    <span className="badge-forest"><Check className="w-3 h-3" /> {t('marketplace.selected')}</span>
-                  ) : (
-                    <span className="text-xs text-savanna-600 font-medium flex items-center gap-1">
-                      {t('marketplace.usetemplate')} <ArrowRight className="w-3 h-3" />
-                    </span>
-                  )}
-                </div>
+                <div className="pt-3 border-t border-neutral-100"><span className="badge-neutral">{t('common.soon')}</span></div>
               </div>
             );
           })}
-        </div>
-      )}
-
-      {selected && (
-        <div className="fixed bottom-6 right-6 card p-4 shadow-xl animate-slide-up flex items-center gap-4 max-w-md">
-          <div className="w-10 h-10 rounded-xl bg-savanna-50 flex items-center justify-center shrink-0">
-            <Check className="w-5 h-5 text-savanna-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-neutral-900">{t('marketplace.selected.title')}</p>
-            <p className="text-xs text-neutral-500">{t('marketplace.selected.desc')}</p>
-          </div>
-          <a href="/projects/new" className="btn-primary text-sm py-2 shrink-0">
-            {t('marketplace.create')}
-          </a>
         </div>
       )}
     </div>

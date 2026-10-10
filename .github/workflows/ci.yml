@@ -42,7 +42,7 @@ jobs:
           deno-version: v2.x
       - name: Vérification des types
         working-directory: supabase/functions
-        run: deno check _shared/*.ts verify-kkiapay/*.ts kkiapay-webhook/*.ts delete-account/*.ts
+        run: deno check _shared/*.ts verify-kkiapay/*.ts kkiapay-webhook/*.ts delete-account/*.ts process-dataset/*.ts
       - name: Tests
         working-directory: supabase/functions
         run: deno test --no-prompt -A

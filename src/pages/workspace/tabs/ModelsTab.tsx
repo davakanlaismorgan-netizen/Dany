@@ -1,3 +1,4 @@
+import { DemoBanner } from '@/components/DemoBanner';
 import { onActivate } from '@/lib/a11y';
 import { useEffect, useState } from 'react';
 import {
@@ -66,6 +67,7 @@ export function ModelsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
+      <DemoBanner feature="models" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">{t('models.title')}</h2>

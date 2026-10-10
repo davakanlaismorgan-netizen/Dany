@@ -1,3 +1,4 @@
+import { DemoBanner } from '@/components/DemoBanner';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Sparkles, Send, Paperclip, Mic, Trash2, Plus,
@@ -191,7 +192,9 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="flex flex-col h-[calc(100vh-56px)]">
+      <div className="p-3 border-b border-neutral-200 bg-white"><DemoBanner feature="assistant" /></div>
+      <div className="flex flex-1 min-h-0">
       {/* Sidebar - conversations */}
       <div className="w-72 shrink-0 bg-white border-r border-neutral-200 hidden lg:flex flex-col">
         <div className="p-4 border-b border-neutral-200">
@@ -369,6 +372,7 @@ export default function AssistantPage() {
             {t('assistant.disclaimer')}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

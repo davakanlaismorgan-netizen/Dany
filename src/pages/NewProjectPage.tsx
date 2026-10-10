@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
+import { logActivity } from '@/lib/activity';
 import type { Sector } from '@/types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
@@ -71,7 +72,10 @@ export function NewProjectPage() {
         .select()
         .maybeSingle();
       if (error) throw error;
-      if (data) navigate(`/projects/${data.id}/data`);
+      if (data) {
+        void logActivity('project.created', 'project', data.id, { name });
+        navigate(`/projects/${data.id}/data`);
+      }
     } catch (err) {
       setCreateError(friendlyError(err, lang === 'fr' ? 'Échec de la création du projet' : 'Failed to create project', t));
     } finally {

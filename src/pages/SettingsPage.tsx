@@ -388,38 +388,24 @@ export default function SettingsPage() {
                   <h2 className="font-semibold text-neutral-900">{t('settings.team.title')}</h2>
                   <p className="text-sm text-neutral-500 mt-1">{t('settings.team.desc')}</p>
                 </div>
-                <button className="btn-primary text-sm">
+                <button type="button" disabled className="btn-primary text-sm opacity-50 cursor-not-allowed" aria-describedby="team-soon">
                   <Plus className="w-4 h-4" /> {t('settings.team.invite')}
                 </button>
               </div>
 
+              <div role="note" id="team-soon" className="mb-4 p-3 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800">{t('demo.team')}</div>
+
               <div className="space-y-2">
-                {[
-                  { name: profile?.full_name || 'You', email: user?.email || '', role: 'Admin', status: 'active' },
-                  { name: 'Aminata Diallo', email: 'aminata@example.com', role: 'Analyst', status: 'active' },
-                  { name: 'Kwame Mensah', email: 'kwame@example.com', role: 'Viewer', status: 'pending' },
-                ].map((m, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-savanna-400 to-clay-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                      {m.name[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-800">{m.name}</p>
-                      <p className="text-xs text-neutral-400 truncate">{m.email}</p>
-                    </div>
-                    <span className={cn('badge', m.role === 'Admin' ? 'badge-savanna' : m.role === 'Analyst' ? 'badge-ocean' : 'badge-neutral')}>
-                      {m.role}
-                    </span>
-                    <span className={cn('badge', m.status === 'active' ? 'badge-forest' : 'badge-gold')}>
-                      {m.status}
-                    </span>
-                    {i > 0 && (
-                      <button className="btn-ghost p-2 text-clay-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-savanna-400 to-clay-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                    {(profile?.full_name || user?.email || '?')[0].toUpperCase()}
                   </div>
-                ))}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-800">{profile?.full_name || user?.email}</p>
+                    <p className="text-xs text-neutral-400 truncate">{user?.email}</p>
+                  </div>
+                  <span className="badge badge-savanna">Admin</span>
+                </div>
               </div>
 
               {profile?.plan === 'free' && (

@@ -6,6 +6,9 @@ import {
   AlertTriangle, XCircle, Loader2,
 } from 'lucide-react';
 import { friendlyError } from '@/lib/errors';
+import { reportError } from '@/lib/report';
+import { processDataset } from '@/lib/processDataset';
+import { logActivity } from '@/lib/activity';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Dataset } from '@/types';
@@ -18,6 +21,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 const sourceIcons: Record<string, typeof Upload> = {
   csv: Upload,
+  json: FileText,
   excel: FileSpreadsheet,
   api: Link2,
   database: Database,
@@ -27,44 +31,13 @@ const sourceIcons: Record<string, typeof Upload> = {
 
 const sourceLabels: Record<string, string> = {
   csv: 'CSV',
+  json: 'JSON',
   excel: 'Excel',
   api: 'API',
   database: 'Database',
   sheets: 'Google Sheets',
   sample: 'Sample',
 };
-
-function parseCSV(text: string): { headers: string[]; rows: string[][]; rowCount: number } {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length === 0) return { headers: [], rows: [], rowCount: 0 };
-  const headers = parseCSVLine(lines[0]);
-  const rows = lines.slice(1, 100).map(l => parseCSVLine(l));
-  return { headers, rows, rowCount: lines.length - 1 };
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-    else if (ch === '"') { inQuotes = !inQuotes; }
-    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
-    else { current += ch; }
-  }
-  result.push(current);
-  return result;
-}
-
-function parseJSON(text: string): { headers: string[]; rows: string[][]; rowCount: number } {
-  const data = JSON.parse(text);
-  const arr = Array.isArray(data) ? data : [data];
-  if (arr.length === 0) return { headers: [], rows: [], rowCount: 0 };
-  const headers = Object.keys(arr[0]);
-  const rows = arr.slice(0, 100).map(item => headers.map(h => String(item[h] ?? '')));
-  return { headers, rows, rowCount: arr.length };
-}
 
 export function DataTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
@@ -89,7 +62,8 @@ export function DataTab({ projectId }: { projectId: string }) {
         .order('created_at', { ascending: false });
       if (error) throw error;
       setDatasets((data as Dataset[]) ?? []);
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'DataTab.load' });
       setDatasets([]);
       setLoadError(true);
     } finally {
@@ -103,79 +77,63 @@ export function DataTab({ projectId }: { projectId: string }) {
 
   async function handleFileUpload(file: File) {
     if (!user) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (ext !== 'csv' && ext !== 'json') {
+      setUploadError(t(ext === 'xlsx' || ext === 'xls' ? 'data.err.excel' : 'data.err.format'));
+      return;
+    }
     if (file.size > MAX_FILE_SIZE) {
-      setUploadError(lang === 'fr' ? 'Fichier trop volumineux (max 50 Mo)' : 'File too large (max 50MB)');
+      setUploadError(t('data.err.too_large'));
       return;
     }
     setUploading(true);
     setUploadError(null);
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'csv';
-    const sourceType = ext === 'xls' || ext === 'xlsx' ? 'excel' : ext;
-    const safeName = sanitizeFilename(file.name);
-    const filePath = `${user.id}/${projectId}/${Date.now()}_${safeName}`;
-
-    let rowCount = 0;
-    let columnCount = 0;
-    let headers: string[] = [];
-    let previewRows: string[][] = [];
-
+    const filePath = `${user.id}/${projectId}/${Date.now()}_${sanitizeFilename(file.name)}`;
+    let datasetId: string | null = null;
     try {
-      if (ext === 'csv' || ext === 'json') {
-        const text = await file.text();
-        if (ext === 'csv') {
-          const parsed = parseCSV(text);
-          rowCount = parsed.rowCount;
-          columnCount = parsed.headers.length;
-          headers = parsed.headers;
-          previewRows = parsed.rows;
-        } else {
-          const parsed = parseJSON(text);
-          rowCount = parsed.rowCount;
-          columnCount = parsed.headers.length;
-          headers = parsed.headers;
-          previewRows = parsed.rows;
-        }
-      }
-    } catch {
-      // parsing failed — continue with 0 counts
-    }
-
-    try {
-      const { error: storageError } = await supabase.storage
-        .from('datasets')
-        .upload(filePath, file);
-
+      const { error: storageError } = await supabase.storage.from('datasets').upload(filePath, file);
       if (storageError) throw storageError;
 
+      // Seules les colonnes d'identité sont écrites ici ; lignes, colonnes et profil sont calculés par le serveur.
       const { data, error: dbError } = await supabase
         .from('datasets')
         .insert({
           project_id: projectId,
           name: file.name,
-          source_type: sourceType,
+          source_type: ext,
           source_config: { storage_path: filePath, original_name: file.name },
           size_bytes: file.size,
-          row_count: rowCount,
-          column_count: columnCount,
-          profiling: headers.length > 0 ? { headers, preview: previewRows } : {},
-          status: headers.length > 0 ? 'profiled' : 'uploaded',
         })
-        .select()
+        .select('id')
         .single();
+      if (dbError) throw dbError;
+      datasetId = data.id as string;
 
-      if (dbError) {
-        await supabase.storage.from('datasets').remove([filePath]);
-        throw dbError;
+      const result = await processDataset(datasetId);
+      if (!result.ok) {
+        // Le serveur a déjà supprimé le dataset en cas de dépassement du plan ; sinon on nettoie ici.
+        if (result.code !== 'plan_limit_rows') await removeDataset(datasetId, filePath);
+        setUploadError(t(`data.err.${result.code}`));
+        return;
       }
-
-      setDatasets(prev => [data as Dataset, ...prev]);
+      void logActivity('dataset.imported', 'dataset', datasetId, { name: file.name });
+      await loadDatasets();
       setShowUpload(false);
     } catch (err) {
-      setUploadError(friendlyError(err, lang === 'fr' ? 'Échec de l\'import' : 'Upload failed', t));
+      reportError(err, { where: 'DataTab.upload' });
+      if (datasetId) await removeDataset(datasetId, filePath);
+      else await supabase.storage.from('datasets').remove([filePath]).then(({ error }) => { if (error) reportError(error); });
+      setUploadError(friendlyError(err, t('data.err.unknown'), t));
     } finally {
       setUploading(false);
     }
+  }
+
+  async function removeDataset(id: string, path: string) {
+    const { error: e1 } = await supabase.from('datasets').delete().eq('id', id);
+    const { error: e2 } = await supabase.storage.from('datasets').remove([path]);
+    if (e1 || e2) reportError(e1 ?? e2, { where: 'DataTab.cleanup' });
   }
 
   async function handleDeleteDataset(ds: Dataset) {
@@ -189,10 +147,13 @@ export function DataTab({ projectId }: { projectId: string }) {
       }
       const { error: dbErr } = await supabase.from('datasets').delete().eq('id', ds.id);
       if (dbErr) throw dbErr;
+      void logActivity('dataset.deleted', 'dataset', undefined, { name: ds.name });
       setDatasets(prev => prev.filter(d => d.id !== ds.id));
       if (selectedDataset?.id === ds.id) setSelectedDataset(null);
-    } catch {
-      // keep both intact if either fails
+    } catch (err) {
+      reportError(err, { where: 'DataTab.delete' });
+      setUploadError(friendlyError(err, t('data.err.delete'), t));
+      setShowUpload(true);
     } finally {
       setDeletingId(null);
     }
@@ -226,7 +187,7 @@ export function DataTab({ projectId }: { projectId: string }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {Object.entries(sourceLabels).map(([key, label]) => {
               const Icon = sourceIcons[key] || Upload;
-              const isClickable = key === 'csv' || key === 'excel';
+              const isClickable = key === 'csv' || key === 'json';
               return (
                 <button
                   key={key}
@@ -245,6 +206,7 @@ export function DataTab({ projectId }: { projectId: string }) {
                 >
                   <Icon className="w-6 h-6 text-savanna-600" />
                   <span className="text-sm font-medium text-neutral-700">{label}</span>
+                  {!isClickable && <span className="text-[10px] uppercase tracking-wide text-neutral-500">{t('common.soon')}</span>}
                 </button>
               );
             })}
@@ -253,7 +215,7 @@ export function DataTab({ projectId }: { projectId: string }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,.xlsx,.xls,.json"
+            accept=".csv,.json"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -396,7 +358,12 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function DataPreview({ dataset, onClose, t, lang }: { dataset: Dataset; onClose: () => void; t: (key: string) => string; lang: string }) {
-  const profiling = dataset.profiling as { headers?: string[]; preview?: string[][] };
+  const profiling = dataset.profiling as {
+    headers?: string[]; preview?: string[][]; bad_rows?: number;
+    columns?: { name: string; type: 'number' | 'text'; missing: number; distinct: number }[];
+  };
+  const columnsProfile = profiling?.columns ?? [];
+  const badRows = profiling?.bad_rows ?? 0;
   const headers = profiling?.headers || [];
   const previewRows = profiling?.preview || [];
 
@@ -429,6 +396,37 @@ function DataPreview({ dataset, onClose, t, lang }: { dataset: Dataset; onClose:
           </div>
         ))}
       </div>
+
+      {columnsProfile.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-neutral-900 mb-2">{t('data.profile.title')}</h4>
+          <div className="overflow-x-auto border border-neutral-200 rounded-xl">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-neutral-50 border-b border-neutral-200 text-left text-neutral-600">
+                  <th className="px-4 py-2 font-medium">{t('data.profile.column')}</th>
+                  <th className="px-4 py-2 font-medium">{t('data.profile.type')}</th>
+                  <th className="px-4 py-2 font-medium">{t('data.missing')}</th>
+                  <th className="px-4 py-2 font-medium">{t('data.profile.distinct')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {columnsProfile.map((c) => (
+                  <tr key={c.name}>
+                    <td className="px-4 py-2 text-neutral-800 whitespace-nowrap">{c.name}</td>
+                    <td className="px-4 py-2 text-neutral-600">{c.type === 'number' ? t('data.numeric') : t('data.categorical')}</td>
+                    <td className="px-4 py-2 text-neutral-600">{formatNumber(c.missing)}{dataset.row_count > 0 ? ` (${Math.round((c.missing / dataset.row_count) * 100)} %)` : ''}</td>
+                    <td className="px-4 py-2 text-neutral-600">{c.distinct >= 1000 ? '1 000+' : formatNumber(c.distinct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {badRows > 0 && (
+            <p className="mt-2 text-xs text-gold-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {badRows} {t('data.profile.badrows')}</p>
+          )}
+        </div>
+      )}
 
       {hasRealData ? (
         <div className="overflow-x-auto scrollbar-thin border border-neutral-200 rounded-xl">

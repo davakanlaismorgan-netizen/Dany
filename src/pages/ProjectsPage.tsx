@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Search, FolderKanban, LayoutGrid, List } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Project, Sector } from '@/types';
-import { sectorConfig } from '@/lib/mockData';
+import { sectorConfig } from '@/lib/sectors';
 import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';

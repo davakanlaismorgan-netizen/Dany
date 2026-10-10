@@ -23,6 +23,19 @@ describe('garde-fous statiques du code livré', () => {
     const bad = src.filter(([, c]) => (c.match(/target=["']_blank["'][^>]*/g) ?? []).some((m) => !m.includes('noopener') && !/rel=.*noopener/.test(c)));
     expect(bad.map(([f]) => f)).toEqual([]);
   });
+  it('plus de données fictives dans le bundle (mockData supprimé, aucune valeur aléatoire affichée comme résultat)', () => {
+    expect(src.filter(([f]) => /mockData/.test(f)).map(([f]) => f)).toEqual([]);
+    expect(src.filter(([, c]) => /from '@\/lib\/mockData'/.test(c)).map(([f]) => f)).toEqual([]);
+  });
+  it('les pages de démonstration affichent le bandeau Démo', () => {
+    const need: Record<string, string> = {
+      'src/pages/AssistantPage.tsx': 'assistant', 'src/pages/workspace/tabs/ModelsTab.tsx': 'models',
+      'src/pages/workspace/tabs/PipelineTab.tsx': 'pipelines', 'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
+    };
+    for (const [f, feat] of Object.entries(need)) {
+      expect(readFileSync(f, 'utf8')).toContain(`<DemoBanner feature="${feat}" />`);
+    }
+  });
   it('seules les variables VITE_ publiques sont lues, aucun secret', () => {
     const vars = src.flatMap(([, c]) => [...c.matchAll(/import\.meta\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]));
     expect(vars.filter((v) => !v.startsWith('VITE_') && !['DEV', 'PROD', 'MODE', 'BASE_URL'].includes(v))).toEqual([]);

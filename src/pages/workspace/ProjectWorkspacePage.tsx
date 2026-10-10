@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Project } from '@/types';
-import { sectorConfig } from '@/lib/mockData';
+import { sectorConfig } from '@/lib/sectors';
 import { FullPageLoader, ErrorState } from '@/components/ui/Loading';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';

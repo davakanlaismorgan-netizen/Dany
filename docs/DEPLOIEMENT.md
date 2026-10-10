@@ -37,6 +37,7 @@ Architecture : le navigateur parle à Supabase (RLS) ; les paiements passent par
    npx supabase functions deploy verify-kkiapay
    npx supabase functions deploy kkiapay-webhook --no-verify-jwt
    npx supabase functions deploy delete-account
+   npx supabase functions deploy process-dataset
    ```
 
 ## 2. KKiaPay
@@ -109,3 +110,7 @@ La CI exécute ces deux suites à chaque pull request.
 ## Pages légales
 
 Les pages `/legal/terms`, `/legal/privacy` et `/legal/notice` sont des **textes de travail** et affichent un bandeau « version provisoire ». Renseignez `VITE_COMPANY_NAME`, `VITE_COMPANY_ADDRESS`, `VITE_COMPANY_REGISTRATION`, `VITE_CONTACT_EMAIL`, faites relire les textes par un juriste, puis passez `VITE_LEGAL_REVIEWED=true` (le build refuse si l'identité est incomplète). L'acceptation des CGU est horodatée côté base (`profiles.terms_accepted_at`).
+
+## Import de données (fonction `process-dataset`)
+
+Le navigateur envoie le fichier (CSV ou JSON, 50 Mo max) dans Storage puis appelle `process-dataset`, qui lit le fichier **stocké**, compte les lignes et calcule le profil des colonnes. Le client ne peut pas écrire `row_count`, `profiling` ni `status` (droits de colonnes dans la migration `20261007090000`) : la limite de 10 000 lignes du plan gratuit n'est donc pas contournable. Au-delà de 10 000 lignes en plan gratuit, la ligne et le fichier sont supprimés et l'utilisateur voit un message clair. Limite de traitement : 500 000 lignes / 500 colonnes. **Non testé sur un vrai projet Supabase** : surveillez le temps CPU de la fonction avec un gros fichier avant de promettre cette taille. Les fichiers Excel ne sont pas pris en charge (exporter en CSV).

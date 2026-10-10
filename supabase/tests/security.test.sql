@@ -73,6 +73,7 @@ insert into public.projects (id, name, user_id) values
   ('aaaaaaaa-1111-0000-0000-000000000001', 'Projet A', 'aaaaaaaa-0000-0000-0000-00000000000a'),
   ('bbbbbbbb-1111-0000-0000-000000000001', 'Projet B', 'bbbbbbbb-0000-0000-0000-00000000000b');
 insert into public.datasets (id, project_id, name, user_id) values
+  ('aaaaaaaa-2222-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'Dataset A', 'aaaaaaaa-0000-0000-0000-00000000000a'),
   ('bbbbbbbb-2222-0000-0000-000000000001', 'bbbbbbbb-1111-0000-0000-000000000001', 'Dataset B', 'bbbbbbbb-0000-0000-0000-00000000000b');
 
 -- Raccourcis
@@ -123,9 +124,9 @@ select tests.expect_val('A ne voit pas le projet de B', 'authenticated', :A::uui
 select tests.expect_fail('ATTAQUE: A crée un dataset dans le projet de B', 'authenticated', :A::uuid, 'a@test.dev',
   $q$insert into public.datasets (project_id, name) values ('bbbbbbbb-1111-0000-0000-000000000001','intrus')$q$, 'row-level security');
 select tests.expect_ok('légitime: A crée un dataset dans son projet', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.datasets (id, project_id, name, row_count) values ('aaaaaaaa-2222-0000-0000-000000000001','aaaaaaaa-1111-0000-0000-000000000001','ds A', 500)$q$);
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','ds A bis')$q$);
 select tests.expect_fail('ATTAQUE: A déplace son dataset vers le projet de B', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$update public.datasets set project_id = 'bbbbbbbb-1111-0000-0000-000000000001' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'row-level security');
+  $q$update public.datasets set project_id = 'bbbbbbbb-1111-0000-0000-000000000001' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'permission denied');
 select tests.expect_fail('ATTAQUE: A référence le dataset de B dans un modèle', 'authenticated', :A::uuid, 'a@test.dev',
   $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','m','x','classification')$q$, 'row-level security');
 select tests.expect_ok('légitime: A crée un modèle sans dataset', 'authenticated', :A::uuid, 'a@test.dev',
@@ -156,8 +157,13 @@ select tests.expect_ok('free: 3e projet', 'authenticated', :A::uuid, 'a@test.dev
   $q$insert into public.projects (name) values ('p3')$q$);
 select tests.expect_fail('free: 4e projet refusé', 'authenticated', :A::uuid, 'a@test.dev',
   $q$insert into public.projects (name) values ('p4')$q$, 'plan_limit:projects');
-select tests.expect_fail('free: dataset > 10 000 lignes refusé', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.datasets (project_id, name, row_count) values ('aaaaaaaa-1111-0000-0000-000000000001','gros', 20000)$q$, 'plan_limit:rows');
+select tests.expect_ok('free: le serveur enregistre 5 000 lignes', 'service_role', null, null,
+  $q$update public.datasets set row_count = 5000 where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$);
+select tests.expect_fail('free: dataset > 10 000 lignes refusé (écriture serveur)', 'service_role', null, null,
+  $q$update public.datasets set row_count = 20000 where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'plan_limit:rows');
+
+select tests.expect_val('free: row_count réellement enregistré par le serveur', 'service_role', null, null,
+  $q$select row_count from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, '5000');
 
 -- ===== Paiement : activation côté serveur =====
 select tests.expect_val('activate_plan renvoie une échéance ~1 mois', 'service_role', null, null,
@@ -166,8 +172,10 @@ select tests.expect_val('current_plan = premium après paiement', 'authenticated
   $q$select public.current_plan()$q$, 'premium');
 select tests.expect_ok('premium: 4e projet autorisé', 'authenticated', :A::uuid, 'a@test.dev',
   $q$insert into public.projects (name) values ('p4')$q$);
-select tests.expect_ok('premium: dataset > 10 000 lignes autorisé', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.datasets (project_id, name, row_count) values ('aaaaaaaa-1111-0000-0000-000000000001','gros', 20000)$q$);
+select tests.expect_ok('premium: dataset > 10 000 lignes autorisé', 'service_role', null, null,
+  $q$update public.datasets set row_count = 20000 where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$);
+select tests.expect_val('premium: row_count 20 000 enregistré', 'service_role', null, null,
+  $q$select row_count from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, '20000');
 select tests.expect_val('A voit son paiement', 'authenticated', :A::uuid, 'a@test.dev',
   $q$select count(*) from public.payments$q$, '1');
 select tests.expect_val('B ne voit pas le paiement de A', 'authenticated', :B::uuid, 'b@test.dev',
@@ -231,6 +239,20 @@ select tests.expect_val('sans acceptation: aucun horodatage', 'postgres', null, 
   $q$select (terms_accepted_at is null)::text from public.profiles where id = 'eeeeeeee-0000-0000-0000-00000000000e'$q$, 'true');
 select tests.expect_fail('handle_new_user non appelable par un client', 'authenticated', :A::uuid, 'a@test.dev',
   $q$select public.handle_new_user()$q$, 'permission denied');
+
+-- ===== Métadonnées de dataset : écriture réservée au serveur =====
+select tests.expect_fail('ATTAQUE: le client insère un dataset avec row_count', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.datasets (project_id, name, row_count) values ('aaaaaaaa-1111-0000-0000-000000000001','x', 1)$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: le client insère un dataset avec profiling', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.datasets (project_id, name, profiling) values ('aaaaaaaa-1111-0000-0000-000000000001','x', '{}')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: le client insère un dataset avec status', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.datasets (project_id, name, status) values ('aaaaaaaa-1111-0000-0000-000000000001','x', 'profiled')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: le client réécrit row_count', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.datasets set row_count = 1 where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: le client réécrit status', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.datasets set status = 'profiled' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_ok('légitime: le client renomme son dataset', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.datasets set name = 'renommé' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$);
 
 -- ===== Bilan =====
 select n, case when ok then 'PASS' else 'FAIL' end as resultat, label, case when ok then '' else detail end as detail

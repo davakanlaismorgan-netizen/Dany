@@ -1,3 +1,4 @@
+import { DemoBanner } from '@/components/DemoBanner';
 import { onActivate } from '@/lib/a11y';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -221,7 +222,9 @@ export function PipelineTab({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-180px)]">
+    <div>
+    <div className="p-4 pb-0"><DemoBanner feature="pipelines" /></div>
+    <div className="flex h-[calc(100vh-260px)]">
       {/* Node palette */}
       <div className="w-64 shrink-0 bg-white border-r border-neutral-200 overflow-y-auto scrollbar-thin p-4">
         <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">{t('pipeline.palette')}</h3>
@@ -418,6 +421,7 @@ results.to_csv("output/predictions.csv", index=False)`}</pre>
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
