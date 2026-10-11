@@ -14,7 +14,7 @@ export function FullPageLoader() {
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center animate-pulse-slow">
           <LoadingSpinner size={28} className="text-white" />
         </div>
-        <p className="text-neutral-500 text-sm">{t('common.danysia.loading')}</p>
+        <p className="text-neutral-500 text-sm">{t('common.loading.app')}</p>
       </div>
     </div>
   );

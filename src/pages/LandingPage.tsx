@@ -1,14 +1,15 @@
+import { CONTACT_EMAIL } from '@/lib/config';
+import { LogoMark } from '@/components/LogoMark';
+import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
-  Brain,
   BarChart3,
   Database,
   Sparkles,
   Workflow,
   Globe,
   Zap,
-  TrendingUp,
   MessageSquare,
   Check,
   ArrowRight,
@@ -81,12 +82,12 @@ export function LandingPage() {
 
   const plans = [
     {
-      name: t('pricing.free'), price: '$0', period: t('pricing.forever'), desc: t('pricing.free.desc'),
-      features: lang === 'fr' ? ['3 projets', '10K lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque Danysia'] : ['3 projects', '10K rows per dataset', '5 visualizations', 'Basic AutoML (3 models)', 'Community support', 'Danysia branding'],
+      name: t('pricing.free'), price: formatXof(0, lang), period: t('pricing.forever'), desc: t('pricing.free.desc'),
+      features: lang === 'fr' ? ['3 projets', '10K lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque DAS'] : ['3 projects', '10K rows per dataset', '5 visualizations', 'Basic AutoML (3 models)', 'Community support', 'DAS branding'],
       cta: t('pricing.startfree'), highlight: false,
     },
     {
-      name: t('pricing.premium'), price: '$29', period: t('pricing.month'), desc: t('pricing.premium.desc'),
+      name: t('pricing.premium'), price: formatXof(PREMIUM_PRICE_XOF, lang), period: t('pricing.month'), desc: t('pricing.premium.desc'),
       features: lang === 'fr' ? ['Projets illimités', 'AutoML complet', 'Tous les modules sectoriels', 'PNT avancée & multilingue', 'Accès API', 'Rapports white-label', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire'] : ['Unlimited projects', 'Full AutoML suite', 'All sector modules', 'Advanced NLP & multilingual', 'API access', 'White-label reports', 'Team collaboration (10 users)', 'Priority support'],
       cta: t('pricing.trial.btn'), highlight: true,
     },
@@ -104,24 +105,28 @@ export function LandingPage() {
     { step: '04', icon: BarChart3, title: t('landing.howitworks.step4.title'), desc: t('landing.howitworks.step4.desc') },
   ];
 
-  const stats = [
-    { label: t('landing.stats.ml'), value: '50+' },
-    { label: t('landing.stats.langs'), value: '6' },
-    { label: t('landing.stats.sectors'), value: '5' },
-    { label: t('landing.stats.sources'), value: '10+' },
-  ];
-
-  const footerCols = lang === 'fr'
-    ? [
-        { title: t('landing.footer.product'), links: ['Fonctionnalités', 'Tarifs', 'Marketplace', 'Docs API'] },
-        { title: t('landing.footer.company'), links: ['À propos', 'Blog', 'Carrières', 'Contact'] },
-        { title: t('landing.footer.legal'), links: ['Confidentialité', 'Conditions', 'Sécurité', 'Conformité'] },
-      ]
-    : [
-        { title: t('landing.footer.product'), links: ['Features', 'Pricing', 'Marketplace', 'API Docs'] },
-        { title: t('landing.footer.company'), links: ['About', 'Blog', 'Careers', 'Contact'] },
-        { title: t('landing.footer.legal'), links: ['Privacy', 'Terms', 'Security', 'Compliance'] },
-      ];
+  type FooterLink = { label: string; to?: string; href?: string };
+  const footerCols: { title: string; links: FooterLink[] }[] = [
+    {
+      title: t('landing.footer.product'),
+      links: [
+        { label: t('nav.features'), href: '#features' },
+        { label: t('nav.pricing'), href: '#pricing' },
+      ],
+    },
+    {
+      title: t('landing.footer.company'),
+      links: CONTACT_EMAIL ? [{ label: t('landing.footer.contact'), href: `mailto:${CONTACT_EMAIL}` }] : [],
+    },
+    {
+      title: t('landing.footer.legal'),
+      links: [
+        { label: t('legal.privacy'), to: '/legal/privacy' },
+        { label: t('legal.terms'), to: '/legal/terms' },
+        { label: t('legal.notice'), to: '/legal/notice' },
+      ],
+    },
+  ].filter((col) => col.links.length > 0);
 
   return (
     <div className="min-h-screen bg-white">
@@ -129,10 +134,8 @@ export function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center shadow-md">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-neutral-900">Danysia</span>
+            <LogoMark className="w-9 h-9" />
+            <span className="text-neutral-900">DAS</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
@@ -206,32 +209,6 @@ export function LandingPage() {
             </a>
           </div>
 
-          {/* Stats */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-3xl font-display font-bold text-gradient-savanna">{stat.value}</div>
-                <div className="text-sm text-white/60 mt-1">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Trusted by */}
-      <section className="py-12 bg-neutral-50 border-y border-neutral-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <p className="text-center text-sm text-neutral-500 mb-6">
-            {t('landing.trusted')}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 text-neutral-400 font-display font-bold text-lg">
-            <span>Ecobank</span>
-            <span>MTN Group</span>
-            <span>Jumia</span>
-            <span>Orange</span>
-            <span>Wave</span>
-            <span>Flutterwave</span>
-          </div>
         </div>
       </section>
 
@@ -395,7 +372,7 @@ export function LandingPage() {
           <div className="mt-8 text-center">
             <p className="text-sm text-neutral-500">
               {t('landing.pricing.methods')}{' '}
-              <span className="font-medium text-neutral-700">Stripe, MTN MoMo, Orange Money, Wave, Airtel Money</span>
+              <span className="font-medium text-neutral-700">Mobile Money · Visa · Mastercard</span>
             </p>
           </div>
         </div>
@@ -431,10 +408,8 @@ export function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-1">
               <div className="flex items-center gap-2 font-display font-bold text-xl mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center">
-                  <Brain className="w-5 h-5 text-white" />
-                </div>
-                Danysia
+                <LogoMark className="w-9 h-9" />
+                DAS
               </div>
               <p className="text-sm text-white/50">
                 {t('landing.footer.desc')}
@@ -446,8 +421,12 @@ export function LandingPage() {
                 <h4 className="font-semibold text-sm mb-3">{col.title}</h4>
                 <ul className="space-y-2">
                   {col.links.map((l) => (
-                    <li key={l}>
-                      <a href="#" className="text-sm text-white/50 hover:text-white transition-colors">{l}</a>
+                    <li key={l.label}>
+                      {l.to ? (
+                        <Link to={l.to} className="text-sm text-white/50 hover:text-white transition-colors">{l.label}</Link>
+                      ) : (
+                        <a href={l.href} className="text-sm text-white/50 hover:text-white transition-colors">{l.label}</a>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -456,9 +435,9 @@ export function LandingPage() {
           </div>
 
           <div className="mt-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-white/40">© 2026 Danysia. {lang === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}</p>
+            <p className="text-sm text-white/40">© {new Date().getFullYear()} DAS. {lang === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}</p>
             <div className="flex items-center gap-4 text-sm text-white/40">
-              <span>EN · FR · AR · SW</span>
+              <span>FR · EN</span>
             </div>
           </div>
         </div>

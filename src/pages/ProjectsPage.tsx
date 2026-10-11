@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, FolderKanban, LayoutGrid, List } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Project, Sector } from '@/types';
-import { sectorConfig } from '@/lib/mockData';
-import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
+import { sectorConfig } from '@/lib/sectors';
+import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 
@@ -20,6 +21,8 @@ const sectorColors: Record<string, string> = {
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState('');
   const [sectorFilter, setSectorFilter] = useState<Sector | 'all'>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -37,18 +40,22 @@ export function ProjectsPage() {
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setLoadError(false);
       try {
         const { data, error } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
         if (error) throw error;
         setProjects((data as Project[]) ?? []);
-      } catch {
+      } catch (err) {
+        reportError(err, { where: 'ProjectsPage.load#1' });
         setProjects([]);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, []);
+  }, [reloadKey]);
 
   const filtered = projects.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -123,6 +130,8 @@ export function ProjectsPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
+      ) : loadError ? (
+        <ErrorState message={t('common.error')} onRetry={() => setReloadKey((k) => k + 1)} />
       ) : filtered.length === 0 ? (
         <div className="card">
           <EmptyState

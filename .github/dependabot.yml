@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Dépendances npm : mises à jour mineures/correctifs regroupées ; les versions majeures
+  # arrivent une par une, pour pouvoir les valider séparément.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  # Actions GitHub (épinglées par empreinte de commit dans ci.yml)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

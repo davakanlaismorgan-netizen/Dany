@@ -1,3 +1,5 @@
+import { DemoBanner } from '@/components/DemoBanner';
+import { onActivate } from '@/lib/a11y';
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -8,9 +10,10 @@ import {
   Brain, Target, Zap, Award, Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Model, Dataset } from '@/types';
 
-import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
+import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 
@@ -34,6 +37,8 @@ export function ModelsTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [showNewModel, setShowNewModel] = useState(false);
   const [modelForm, setModelForm] = useState({ name: '', taskType: 'classification', datasetId: '', targetColumn: '' });
@@ -46,16 +51,20 @@ export function ModelsTab({ projectId }: { projectId: string }) {
       setDatasets((data as Dataset[]) ?? []);
     }
     loadDatasets();
-  }, [projectId]);
+  }, [projectId, reloadKey]);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setLoadError(false);
       try {
         const { data, error } = await supabase.from('models').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
         if (error) throw error;
         setModels((data as Model[]) ?? []);
-      } catch {
+      } catch (err) {
+        reportError(err, { where: 'ModelsTab#1' });
         setModels([]);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -65,6 +74,7 @@ export function ModelsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
+      <DemoBanner feature="models" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">{t('models.title')}</h2>
@@ -173,7 +183,7 @@ export function ModelsTab({ projectId }: { projectId: string }) {
                   }, 1500);
                   setTimeout(async () => {
                     const isRegression = modelForm.taskType === 'regression';
-                    const mockMetrics = isRegression
+                    const mockMetrics: Record<string, number> = isRegression
                       ? { rmse: 0.0832, mae: 0.0654, r2: 0.87 + Math.random() * 0.08 }
                       : { accuracy: 0.86 + Math.random() * 0.1, precision: 0.82 + Math.random() * 0.1, recall: 0.79 + Math.random() * 0.1, f1: 0.81 + Math.random() * 0.08 };
                     const mockFeatures = ['transaction_count', 'avg_amount', 'days_active', 'balance_trend', 'network_diversity', 'frequency_score']
@@ -203,6 +213,8 @@ export function ModelsTab({ projectId }: { projectId: string }) {
         <div className="grid md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
+      ) : loadError ? (
+        <ErrorState message={t('common.error')} onRetry={() => setReloadKey((k) => k + 1)} />
       ) : models.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -221,7 +233,10 @@ export function ModelsTab({ projectId }: { projectId: string }) {
             return (
               <div
                 key={model.id}
+                role={model.status === 'completed' ? 'button' : undefined}
+                tabIndex={model.status === 'completed' ? 0 : undefined}
                 onClick={() => model.status === 'completed' && setSelectedModel(selectedModel?.id === model.id ? null : model)}
+                onKeyDown={onActivate(() => model.status === 'completed' && setSelectedModel(selectedModel?.id === model.id ? null : model))}
                 className={cn('card p-5', model.status === 'completed' && 'cursor-pointer card-hover')}
               >
                 <div className="flex items-start justify-between mb-3">
@@ -310,7 +325,7 @@ function ModelDetailPanel({ model, onClose, t }: { model: Model; onClose: () => 
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" stroke="#94a3b8" fontSize={12} domain={[0, 100]} />
               <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={120} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v: any) => `${v}%`} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v) => `${v}%`} />
               <Bar dataKey="value" fill="#df8429" radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>

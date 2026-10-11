@@ -1,9 +1,11 @@
+import { DemoBanner } from '@/components/DemoBanner';
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileText, FileSpreadsheet, Presentation, Download, CheckCircle2,
   Clock, Mail, MessageCircle, Send, Plus, Trash2, Eye, Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import type { Report } from '@/types';
 import { EmptyState, CardSkeleton } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
@@ -92,8 +94,8 @@ export function ReportsTab({ projectId }: { projectId: string }) {
       }
       setShowGenerator(false);
       setSelectedTemplate(null);
-    } catch {
-      // stay on form so user can retry
+    } catch (err) {
+      reportError(err, { where: 'ReportsTab.generate#1' });
     } finally {
       setGenerating(false);
     }
@@ -110,6 +112,7 @@ export function ReportsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
+      <DemoBanner feature="reports" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">{t('reports.title')}</h2>

@@ -2,12 +2,18 @@ import { useState } from 'react';
 import { Save, Check, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { friendlyError } from '@/lib/errors';
+import { reportError } from '@/lib/report';
+import { removeProjectFiles } from '@/lib/projectCleanup';
+import { useAuth } from '@/context/AuthContext';
 import type { Project } from '@/types';
 import { useI18n } from '@/context/I18nContext';
 
 export function ProjectSettingsTab({ projectId, project }: { projectId: string; project: Project }) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || '');
   const [saving, setSaving] = useState(false);
@@ -17,11 +23,12 @@ export function ProjectSettingsTab({ projectId, project }: { projectId: string; 
 
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase.from('projects').update({
-      name,
-      description,
-    }).eq('id', projectId);
-    if (!error) {
+    setError(null);
+    const { error: err } = await supabase.from('projects').update({ name, description }).eq('id', projectId);
+    if (err) {
+        reportError(err, { where: 'ProjectSettingsTab.save' });
+      setError(friendlyError(err, t('common.error'), t));
+    } else {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
@@ -29,12 +36,21 @@ export function ProjectSettingsTab({ projectId, project }: { projectId: string; 
   };
 
   const handleDelete = async () => {
+    if (!user) return;
     setDeleting(true);
-    const { error } = await supabase.from('projects').delete().eq('id', projectId);
-    if (!error) {
+    setError(null);
+    try {
+      // Fichiers d'abord : si cela échoue, le projet est conservé et l'opération peut être relancée.
+      await removeProjectFiles(user.id, projectId);
+      const { error: err } = await supabase.from('projects').delete().eq('id', projectId);
+      if (err) throw err;
       navigate('/projects');
+    } catch (err) {
+      reportError(err, { where: 'ProjectSettingsTab.delete' });
+      setError(friendlyError(err, t('common.error'), t));
+    } finally {
+      setDeleting(false);
     }
-    setDeleting(false);
   };
 
   return (
@@ -43,6 +59,8 @@ export function ProjectSettingsTab({ projectId, project }: { projectId: string; 
         <h2 className="text-lg font-semibold text-neutral-900">{t('settings.title')}</h2>
         <p className="text-sm text-neutral-500 mt-1">{t('settings.project.desc')}</p>
       </div>
+
+      {error && <div role="alert" className="p-3 rounded-xl bg-clay-50 border border-clay-200 text-sm text-clay-700">{error}</div>}
 
       <div className="card p-6 space-y-4">
         <div>

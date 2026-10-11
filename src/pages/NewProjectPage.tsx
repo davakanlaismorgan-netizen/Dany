@@ -5,7 +5,9 @@ import {
   ArrowRight, ArrowLeft, Check, Upload, Link2, FileSpreadsheet,
   Cloud, Globe, AlertTriangle,
 } from 'lucide-react';
+import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
+import { logActivity } from '@/lib/activity';
 import type { Sector } from '@/types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
@@ -70,9 +72,12 @@ export function NewProjectPage() {
         .select()
         .maybeSingle();
       if (error) throw error;
-      if (data) navigate(`/projects/${data.id}/data`);
+      if (data) {
+        void logActivity('project.created', 'project', data.id, { name });
+        navigate(`/projects/${data.id}/data`);
+      }
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : (lang === 'fr' ? 'Échec de la création du projet' : 'Failed to create project'));
+      setCreateError(friendlyError(err, lang === 'fr' ? 'Échec de la création du projet' : 'Failed to create project', t));
     } finally {
       setCreating(false);
     }
@@ -118,7 +123,7 @@ export function NewProjectPage() {
           <div className="space-y-5 animate-fade-in">
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1.5">{t('newproject.name')}</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder={t('newproject.name.placeholder')} autoFocus />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder={t('newproject.name.placeholder')} />
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1.5">{t('newproject.description')} <span className="text-neutral-400">{t('newproject.description.optional')}</span></label>

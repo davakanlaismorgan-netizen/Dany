@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { LogoMark } from '@/components/LogoMark';
 import { Link } from 'react-router-dom';
 import { Brain, BarChart3, Database, Sparkles } from 'lucide-react';
 import { useI18n, type Language } from '@/context/I18nContext';
@@ -18,10 +19,8 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            Danysia
+            <LogoMark className="w-9 h-9" />
+            DAS
           </Link>
 
           <div className="space-y-8">
@@ -47,9 +46,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <p className="text-white/40 text-sm">
-            {t('auth.brand.trusted')}
-          </p>
         </div>
       </div>
 
@@ -57,10 +53,8 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between p-6 lg:hidden">
           <Link to="/" className="flex items-center gap-2 font-display font-bold text-lg">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center">
-              <Brain className="w-4 h-4 text-white" />
-            </div>
-            Danysia
+            <LogoMark className="w-8 h-8" />
+            DAS
           </Link>
           <LangSwitcher lang={lang} setLang={setLang} />
         </div>

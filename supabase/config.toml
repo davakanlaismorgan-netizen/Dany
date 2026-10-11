@@ -3,3 +3,11 @@ verify_jwt = true
 
 [functions.verify-kkiapay]
 verify_jwt = true
+
+# Appelée par KKiaPay (serveur à serveur) : pas de jeton Supabase possible.
+# Protégée par la signature x-kkiapay-secret vérifiée dans le code.
+[functions.kkiapay-webhook]
+verify_jwt = false
+
+[functions.process-dataset]
+verify_jwt = true

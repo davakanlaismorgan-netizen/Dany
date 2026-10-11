@@ -1,3 +1,5 @@
+import { DemoBanner } from '@/components/DemoBanner';
+import { onActivate } from '@/lib/a11y';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Database, Filter, BarChart3, Sparkles, FileOutput, Download,
@@ -5,6 +7,7 @@ import {
   Upload, Table, GitBranch, Layers, Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 import type { PipelineNode, PipelineEdge } from '@/types';
@@ -156,8 +159,8 @@ export function PipelineTab({ projectId }: { projectId: string }) {
       }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
-    } catch {
-      // ignore
+    } catch (err) {
+      reportError(err, { where: 'PipelineTab#1' });
     } finally {
       setSaving(false);
     }
@@ -214,13 +217,16 @@ export function PipelineTab({ projectId }: { projectId: string }) {
           await supabase.from('pipelines').update({ status: 'completed' }).eq('id', pipelineId);
         }
       }, 2000);
-    } catch {
+    } catch (err) {
+      reportError(err, { where: 'PipelineTab#2' });
       setRunning(false);
     }
   };
 
   return (
-    <div className="flex h-[calc(100vh-180px)]">
+    <div>
+    <div className="p-4 pb-0"><DemoBanner feature="pipelines" /></div>
+    <div className="flex h-[calc(100vh-260px)]">
       {/* Node palette */}
       <div className="w-64 shrink-0 bg-white border-r border-neutral-200 overflow-y-auto scrollbar-thin p-4">
         <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">{t('pipeline.palette')}</h3>
@@ -276,7 +282,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
 
         {showCode ? (
           <div className="flex-1 bg-neutral-900 p-6 overflow-auto scrollbar-thin font-mono text-sm text-neutral-300">
-            <pre className="whitespace-pre-wrap">{`# Danysia Auto-generated Pipeline
+            <pre className="whitespace-pre-wrap">{`# DAS Auto-generated Pipeline
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
@@ -311,8 +317,11 @@ results = pd.DataFrame({"actual": y_test, "predicted": y_pred})
 results.to_csv("output/predictions.csv", index=False)`}</pre>
           </div>
         ) : (
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- surface de glisser-déposer à la souris ; fonction de démonstration, chaque nœud reste atteignable au clavier
           <div
             ref={canvasRef}
+            role="application"
+            aria-label="Pipeline"
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
@@ -359,6 +368,10 @@ results.to_csv("output/predictions.csv", index=False)`}</pre>
               return (
                 <div
                   key={node.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={node.label}
+                  onKeyDown={onActivate(() => setSelectedNode(node.id))}
                   onMouseDown={(e) => handleNodeDragStart(e, node.id)}
                   onClick={() => setSelectedNode(node.id)}
                   className={cn(
@@ -410,6 +423,7 @@ results.to_csv("output/predictions.csv", index=False)`}</pre>
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

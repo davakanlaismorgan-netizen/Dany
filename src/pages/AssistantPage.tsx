@@ -1,3 +1,4 @@
+import { DemoBanner } from '@/components/DemoBanner';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Sparkles, Send, Paperclip, Mic, Trash2, Plus,
@@ -7,6 +8,7 @@ import {
 import { cn, timeAgo } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/report';
 import { useAuth } from '@/context/AuthContext';
 
 interface Message {
@@ -25,7 +27,7 @@ const suggestedPrompts = [
 
 const mockResponses: Record<string, { content: string; insights?: { type: string; text: string }[] }> = {
   default: {
-    content: "I'm Danysia AI, your data science assistant. I can help you analyze data, build models, generate insights, and answer questions about your projects. What would you like to explore?",
+    content: "I'm DAS AI, your data science assistant. I can help you analyze data, build models, generate insights, and answer questions about your projects. What would you like to explore?",
   },
   sales: {
     content: "Based on your Lagos Retail Sales dataset, I've identified the key factors behind the 23% Q3 sales decline:\n\n1. **Seasonal dip**: August-September corresponds to the post-harvest low season in Lagos markets, historically showing 15-20% lower demand.\n\n2. **Reduced foot traffic**: Transaction count dropped 18% compared to Q2, suggesting fewer store visits.\n\n3. **Currency pressure**: NGN depreciation against USD increased import costs, leading to higher prices and reduced purchasing power.\n\n**Recommendation**: Focus on promotions for essential goods and consider inventory rebalancing for Q4 holiday demand.",
@@ -183,15 +185,17 @@ export default function AssistantPage() {
       if (activeConvId === convId) {
         newConversation();
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      reportError(err, { where: 'AssistantPage#1' });
     } finally {
       setDeletingConvId(null);
     }
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="flex flex-col h-[calc(100vh-56px)]">
+      <div className="p-3 border-b border-neutral-200 bg-white"><DemoBanner feature="assistant" /></div>
+      <div className="flex flex-1 min-h-0">
       {/* Sidebar - conversations */}
       <div className="w-72 shrink-0 bg-white border-r border-neutral-200 hidden lg:flex flex-col">
         <div className="p-4 border-b border-neutral-200">
@@ -369,6 +373,7 @@ export default function AssistantPage() {
             {t('assistant.disclaimer')}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

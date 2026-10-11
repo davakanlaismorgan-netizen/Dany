@@ -1,29 +1,31 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Zap, Crown, Building2, CreditCard, Smartphone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Check, Zap, Crown, Building2, CreditCard, Smartphone, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
 import { useAuth } from '@/context/AuthContext';
-import { openPaymentWidget, verifyTransaction } from '@/lib/kkiapay';
+import { useCheckout } from '@/hooks/useCheckout';
+import { CheckoutBanner } from '@/components/CheckoutBanner';
+import { LogoMark } from '@/components/LogoMark';
+import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
+import { CONTACT_EMAIL } from '@/lib/config';
 
 export default function PricingPage() {
   const { t, lang } = useI18n();
-  const { user, refreshProfile } = useAuth();
-  const [paying, setPaying] = useState<string | null>(null);
-  const [payStatus, setPayStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
+  const checkout = useCheckout();
+  const { user, profile } = useAuth();
 
   const plans = [
     {
-      name: t('pricing.free'), icon: Zap, price: '$0', period: t('pricing.forever'), desc: t('pricing.free.desc'),
-      planKey: 'free', amount: 0,
+      name: t('pricing.free'), icon: Zap, price: formatXof(0, lang), period: t('pricing.forever'), desc: t('pricing.free.desc'),
+      planKey: 'free',
       features: lang === 'fr'
-        ? ['3 projets maximum', '10 000 lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque Danysia sur les exports']
-        : ['Up to 3 projects', 'Max 10,000 rows per dataset', '5 visualizations', 'Basic AutoML (3 model types)', 'Community support', 'Danysia branding on exports'],
+        ? ['3 projets maximum', '10 000 lignes par jeu de données', '5 visualisations', 'AutoML de base (3 modèles)', 'Support communautaire', 'Marque DAS sur les exports']
+        : ['Up to 3 projects', 'Max 10,000 rows per dataset', '5 visualizations', 'Basic AutoML (3 model types)', 'Community support', 'DAS branding on exports'],
       cta: t('pricing.startfree'), highlight: false, color: 'neutral',
     },
     {
-      name: t('pricing.premium'), icon: Crown, price: '$29', period: t('pricing.month'), desc: t('pricing.premium.desc'),
-      planKey: 'premium', amount: 2900,
+      name: t('pricing.premium'), icon: Crown, price: formatXof(PREMIUM_PRICE_XOF, lang), period: t('pricing.month'), desc: t('pricing.premium.desc'),
+      planKey: 'premium',
       features: lang === 'fr'
         ? ['Projets et jeux de données illimités', 'AutoML complet', 'Tous les modules sectoriels', 'PNT avancée & multilingue', 'Accès API', 'Rapports white-label', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire']
         : ['Unlimited projects and datasets', 'Full AutoML suite', 'All sector-specific modules', 'Advanced NLP & multilingual support', 'API access', 'White-label reports', 'Priority support', 'Team collaboration (up to 10 users)'],
@@ -31,7 +33,7 @@ export default function PricingPage() {
     },
     {
       name: t('pricing.enterprise'), icon: Building2, price: lang === 'fr' ? 'Sur mesure' : 'Custom', period: '', desc: t('pricing.enterprise.desc'),
-      planKey: 'enterprise', amount: 0,
+      planKey: 'enterprise',
       features: lang === 'fr'
         ? ['Tout du plan Premium', 'Intégrations personnalisées', 'Déploiement on-premise', 'Support dédié', 'Modèles linguistiques africains personnalisés', 'Garanties SLA', 'Membres illimités', 'Tarification personnalisée']
         : ['Everything in Premium', 'Custom integrations', 'On-premise deployment option', 'Dedicated support', 'Custom African language models', 'SLA guarantees', 'Unlimited team members', 'Custom pricing'],
@@ -56,58 +58,26 @@ export default function PricingPage() {
       ];
 
   const faqs = lang === 'fr' ? [
-    { q: 'Puis-je changer de plan à tout moment ?', a: 'Oui, vous pouvez changer de plan à tout moment. Les changements prennent effet immédiatement et la facturation est proratisée.' },
+    { q: 'Comment fonctionne le paiement de Premium ?', a: "Premium se paie une fois par mois, par mobile money ou carte bancaire via KKiaPay. Il n'y a ni abonnement ni prélèvement automatique : vous renouvelez quand vous le souhaitez, depuis les Paramètres." },
     { q: 'Quels moyens de paiement sont acceptés ?', a: 'Nous acceptons le mobile money (MTN, Orange, Wave, Airtel) et les cartes bancaires (Visa, Mastercard) via Kkiapay.' },
-    { q: 'Y a-t-il un essai gratuit pour Premium ?', a: 'Oui, Premium inclut un essai gratuit de 14 jours sans carte bancaire. Vous pouvez annuler à tout moment.' },
+    { q: 'Que se passe-t-il à la fin de ma période Premium ?', a: "Votre compte repasse au plan gratuit. Vos projets et vos données sont conservés ; seules les limites du plan gratuit s'appliquent de nouveau aux nouvelles créations." },
     { q: 'Proposez-vous des réductions pour les startups africaines ?', a: 'Oui, nous offrons une tarification spéciale pour les startups africaines et les ONG. Contactez notre équipe commerciale.' },
-    { q: 'Puis-je exporter mes données si j\'annule ?', a: 'Absolument. Vos données vous appartiennent toujours. Vous pouvez exporter tous vos jeux de données, modèles et rapports à tout moment.' },
+    { q: 'Que deviennent mes données si je supprime mon compte ?', a: 'Vous pouvez supprimer votre compte à tout moment depuis les Paramètres : vos projets, jeux de données et fichiers sont alors effacés définitivement.' },
   ] : [
-    { q: 'Can I switch plans at any time?', a: 'Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately and we prorate the billing.' },
+    { q: 'How does Premium billing work?', a: 'Premium is paid once a month by mobile money or card through KKiaPay. There is no subscription and no automatic charge: you renew whenever you want, from Settings.' },
     { q: 'What payment methods are supported?', a: 'We support mobile money (MTN, Orange, Wave, Airtel) and credit/debit cards (Visa, Mastercard) via Kkiapay.' },
-    { q: 'Is there a free trial for Premium?', a: 'Yes, Premium includes a 14-day free trial with no credit card required. You can cancel anytime.' },
+    { q: 'What happens when my Premium period ends?', a: 'Your account goes back to the free plan. Your projects and data are kept; only the free plan limits apply again to new items.' },
     { q: 'Do you offer discounts for African startups?', a: 'Yes, we offer special pricing for early-stage African startups and NGOs. Contact our sales team for details.' },
-    { q: 'Can I export my data if I cancel?', a: 'Absolutely. Your data is always yours. You can export all datasets, models, and reports at any time.' },
+    { q: 'What happens to my data if I delete my account?', a: 'You can delete your account at any time from Settings: your projects, datasets and files are then permanently erased.' },
   ];
-
-  const handlePay = (plan: typeof plans[1]) => {
-    if (plan.planKey === 'free') return;
-    if (plan.planKey === 'enterprise') return;
-
-    setPaying(plan.planKey);
-    setPayStatus('idle');
-
-    openPaymentWidget({
-      amount: plan.amount,
-      plan: plan.planKey,
-      email: user?.email,
-      fullname: (user as any)?.user_metadata?.full_name,
-      onSuccess: async (transactionId) => {
-        setPayStatus('verifying');
-        try {
-          await verifyTransaction(transactionId, plan.planKey);
-          await refreshProfile();
-          setPayStatus('success');
-        } catch {
-          setPayStatus('error');
-        }
-        setPaying(null);
-      },
-      onFailed: () => {
-        setPayStatus('error');
-        setPaying(null);
-      },
-    });
-  };
 
   return (
     <div className="min-h-screen bg-white">
       <nav className="sticky top-0 z-50 glass border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-savanna-500 to-clay-500 flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span>Danysia</span>
+            <LogoMark className="w-9 h-9" />
+            <span>DAS</span>
           </Link>
           <Link to="/" className="btn-ghost text-sm">{t('pricing.back')}</Link>
         </div>
@@ -128,7 +98,6 @@ export default function PricingPage() {
             const Icon = plan.icon;
             const isFree = plan.planKey === 'free';
             const isEnterprise = plan.planKey === 'enterprise';
-            const isPaying = paying === plan.planKey;
             return (
               <div key={plan.name} className={cn('card p-8 relative', plan.highlight && 'border-savanna-400 shadow-xl ring-1 ring-savanna-400/20 scale-[1.02]')}>
                 {plan.highlight && (
@@ -144,7 +113,10 @@ export default function PricingPage() {
                 )}>
                   <Icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
+                  {profile?.plan === plan.planKey && <span className="badge-neutral">{t('pricing.current')}</span>}
+                </div>
                 <p className="text-sm text-neutral-500 mt-1">{plan.desc}</p>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-4xl font-display font-bold text-neutral-900">{plan.price}</span>
@@ -160,32 +132,27 @@ export default function PricingPage() {
                 </ul>
 
                 {isFree ? (
-                  <Link to="/auth/register" className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
+                  user ? null : <Link to="/auth/register" className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
                     {plan.cta}
                   </Link>
                 ) : isEnterprise ? (
-                  <a href="mailto:sales@danysia.com" className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
-                    {plan.cta}
-                  </a>
+                  CONTACT_EMAIL ? (
+                    <a href={`mailto:${CONTACT_EMAIL}`} className={cn('mt-8 w-full text-center block', plan.highlight ? 'btn-primary' : 'btn-secondary')}>
+                      {plan.cta}
+                    </a>
+                  ) : (
+                    <button type="button" disabled className="btn-secondary mt-8 w-full opacity-50 cursor-not-allowed">
+                      {plan.cta}
+                    </button>
+                  )
                 ) : (
                   <button
-                    onClick={() => handlePay(plan)}
-                    disabled={isPaying || payStatus === 'verifying'}
+                    onClick={() => checkout.start()}
+                    disabled={checkout.busy}
                     className={cn('mt-8 w-full flex items-center justify-center gap-2', plan.highlight ? 'btn-primary' : 'btn-secondary')}
                   >
-                    {isPaying && payStatus === 'idle' && (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {t('pricing.pay.now')}...
-                      </>
-                    )}
-                    {payStatus === 'verifying' && (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {t('pricing.pay.verifying')}
-                      </>
-                    )}
-                    {payStatus !== 'verifying' && !isPaying && t('pricing.pay.now')}
+                    {checkout.busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {checkout.status === 'verifying' ? t('pricing.pay.verifying') : profile?.plan === 'premium' ? t('settings.plan.renew') : t('pricing.pay.now')}
                   </button>
                 )}
               </div>
@@ -193,16 +160,9 @@ export default function PricingPage() {
           })}
         </div>
 
-        {payStatus === 'success' && (
-          <div className="max-w-5xl mx-auto mt-6 p-4 rounded-xl bg-forest-50 border border-forest-200 flex items-center gap-3 animate-fade-in">
-            <CheckCircle2 className="w-5 h-5 text-forest-600 shrink-0" />
-            <p className="text-sm text-forest-800">{t('pricing.pay.success')}</p>
-          </div>
-        )}
-        {payStatus === 'error' && (
-          <div className="max-w-5xl mx-auto mt-6 p-4 rounded-xl bg-clay-50 border border-clay-200 flex items-center gap-3 animate-fade-in">
-            <AlertCircle className="w-5 h-5 text-clay-600 shrink-0" />
-            <p className="text-sm text-clay-700">{t('pricing.pay.failed')}</p>
+        {['success', 'failed', 'unverified', 'already_used'].includes(checkout.status) && (
+          <div className="max-w-5xl mx-auto mt-6">
+            <CheckoutBanner status={checkout.status} reference={checkout.reference} onRetry={checkout.retry} />
           </div>
         )}
       </div>

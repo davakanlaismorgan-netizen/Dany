@@ -1,84 +1,79 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  AreaChart, Area, Legend,
-} from 'recharts';
-import {
-  FolderKanban,
-  Database,
-  Sparkles,
-  FileText,
-  TrendingUp,
-  ArrowRight,
-  Activity,
-  Plus,
-  Clock,
-} from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { FolderKanban, Database, Rows3, BarChart3, ArrowRight, Activity, Plus, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/context/I18nContext';
 import { supabase } from '@/lib/supabase';
-import type { Project, Dataset, Model, Report } from '@/types';
-import { recentActivity, dashboardChartData, sectorConfig } from '@/lib/mockData';
-import { CardSkeleton, EmptyState } from '@/components/ui/Loading';
+import { reportError } from '@/lib/report';
+import { countByDay } from '@/lib/activity';
+import type { Project, Dataset } from '@/types';
+import { sectorConfig } from '@/lib/sectors';
+import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, formatNumber, cn } from '@/lib/utils';
-import { useI18n } from '@/context/I18nContext';
 
 const sectorColors: Record<string, string> = {
-  finance: '#df8429',
-  commerce: '#eab308',
-  agriculture: '#22c55e',
-  healthcare: '#e45a2b',
-  logistics: '#0ea5e9',
-  general: '#64748b',
+  finance: '#df8429', commerce: '#eab308', agriculture: '#22c55e',
+  healthcare: '#e45a2b', logistics: '#0ea5e9', general: '#64748b',
 };
+const tooltipStyle = { borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' };
+
+interface ActivityRow { id: string; action: string; created_at: string; metadata: { name?: string } | null }
 
 export function DashboardPage() {
   const { profile } = useAuth();
   const { t, lang } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [counts, setCounts] = useState({ projects: 0, datasets: 0, rows: 0, viz: 0 });
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [weekly, setWeekly] = useState<{ day: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  async function loadData() {
+    setLoading(true);
+    setFailed(false);
+    try {
+      const since = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [proj, projCount, ds, dsCount, viz, act, week] = await Promise.all([
+        supabase.from('projects').select('*').order('updated_at', { ascending: false }).limit(5),
+        supabase.from('projects').select('id', { count: 'exact', head: true }),
+        supabase.from('datasets').select('*').eq('status', 'profiled').order('row_count', { ascending: false }).limit(8),
+        supabase.from('datasets').select('row_count').eq('status', 'profiled').limit(1000),
+        supabase.from('visualizations').select('id', { count: 'exact', head: true }),
+        supabase.from('activity_log').select('id, action, created_at, metadata').order('created_at', { ascending: false }).limit(10),
+        supabase.from('activity_log').select('created_at').gte('created_at', since).limit(1000),
+      ]);
+      const err = [proj, projCount, ds, dsCount, viz, act, week].find((r) => r.error)?.error;
+      if (err) throw err;
+      setProjects((proj.data as Project[]) ?? []);
+      setDatasets((ds.data as Dataset[]) ?? []);
+      setCounts({
+        projects: projCount.count ?? 0,
+        datasets: (dsCount.data ?? []).length,
+        rows: (dsCount.data ?? []).reduce((sum, d) => sum + (d.row_count ?? 0), 0),
+        viz: viz.count ?? 0,
+      });
+      setActivity((act.data as ActivityRow[]) ?? []);
+      setWeekly(countByDay((week.data ?? []).map((r) => r.created_at as string), 7));
+    } catch (err) {
+      reportError(err, { where: 'DashboardPage.load' });
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [projRes, dsRes, mdlRes, rptRes] = await Promise.all([
-          supabase.from('projects').select('*').order('updated_at', { ascending: false }).limit(5),
-          supabase.from('datasets').select('*').order('created_at', { ascending: false }).limit(10),
-          supabase.from('models').select('*').order('created_at', { ascending: false }).limit(10),
-          supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(10),
-        ]);
-
-        if (projRes.error) throw projRes.error;
-        if (dsRes.error) throw dsRes.error;
-        if (mdlRes.error) throw mdlRes.error;
-        if (rptRes.error) throw rptRes.error;
-
-        setProjects((projRes.data as Project[]) ?? []);
-        setDatasets((dsRes.data as Dataset[]) ?? []);
-        setModels((mdlRes.data as Model[]) ?? []);
-        setReports((rptRes.data as Report[]) ?? []);
-      } catch {
-        setProjects([]);
-        setDatasets([]);
-        setModels([]);
-        setReports([]);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
   }, []);
 
   const kpis = [
-    { label: t('dashboard.kpi.projects'), value: projects.filter(p => p.status === 'active').length, total: projects.length, icon: FolderKanban, color: 'savanna' },
-    { label: t('dashboard.kpi.datasets'), value: datasets.length, total: datasets.length, icon: Database, color: 'ocean' },
-    { label: t('dashboard.kpi.models'), value: models.filter(m => m.status === 'completed').length, total: models.length, icon: Sparkles, color: 'forest' },
-    { label: t('dashboard.kpi.reports'), value: reports.length, total: reports.length, icon: FileText, color: 'gold' },
+    { label: t('dashboard.kpi.projects'), value: counts.projects, icon: FolderKanban, color: 'savanna' },
+    { label: t('dashboard.kpi.datasets'), value: counts.datasets, icon: Database, color: 'ocean' },
+    { label: t('dashboard.kpi.rows'), value: counts.rows, icon: Rows3, color: 'forest' },
+    { label: t('dashboard.kpi.viz'), value: counts.viz, icon: BarChart3, color: 'gold' },
   ];
 
   return (
@@ -114,127 +109,55 @@ export function DashboardPage() {
                     )}>
                       <Icon className="w-5 h-5" />
                     </div>
-                    <TrendingUp className="w-4 h-4 text-neutral-300" />
                   </div>
-                  <div className="text-2xl font-display font-bold text-neutral-900">{kpi.value}</div>
+                  <div className="text-2xl font-display font-bold text-neutral-900">{formatNumber(kpi.value)}</div>
                   <div className="text-sm text-neutral-500">{kpi.label}</div>
                 </div>
               );
             })}
       </div>
 
-      {/* Charts row */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Mobile money chart */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-neutral-900">{t('dashboard.chart.momo')}</h3>
-              <p className="text-sm text-neutral-500">{t('dashboard.chart.momo.subtitle')}</p>
-            </div>
-            <span className="badge-savanna">{t('sector.finance')}</span>
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={dashboardChartData.momoTransactions}>
-              <defs>
-                <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#df8429" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#df8429" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-              <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => formatNumber(v)} />
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }}
-                formatter={(v: any) => formatNumber(v)}
-              />
-              <Legend wrapperStyle={{ fontSize: '13px' }} />
-              <Area type="monotone" dataKey="sent" name="Sent" stroke="#df8429" fillOpacity={1} fill="url(#colorSent)" strokeWidth={2} />
-              <Area type="monotone" dataKey="received" name="Received" stroke="#22c55e" fillOpacity={1} fill="url(#colorReceived)" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+      {failed && <ErrorState message={t('common.error')} onRetry={loadData} />}
 
-        {/* Customer segments pie */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-neutral-900">{t('dashboard.chart.segments')}</h3>
-              <p className="text-sm text-neutral-500">{t('dashboard.chart.segments.subtitle')}</p>
-            </div>
-            <span className="badge-gold">{t('sector.commerce')}</span>
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                data={dashboardChartData.customerSegments}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={3}
-              >
-                {dashboardChartData.customerSegments.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} formatter={(v: any) => `${v}%`} />
-              <Legend wrapperStyle={{ fontSize: '13px' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Second row */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Model comparison */}
         <div className="card p-6 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-neutral-900">{t('dashboard.chart.models')}</h3>
-              <p className="text-sm text-neutral-500">{t('dashboard.chart.models.subtitle')}</p>
-            </div>
-            <span className="badge-forest">AutoML</span>
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={dashboardChartData.modelComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="model" stroke="#94a3b8" fontSize={12} />
-              <YAxis stroke="#94a3b8" fontSize={12} domain={[0, 100]} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
-              <Legend wrapperStyle={{ fontSize: '13px' }} />
-              <Bar dataKey="accuracy" name="Accuracy %" fill="#df8429" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="precision" name="Precision %" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="font-semibold text-neutral-900">{t('dashboard.chart.rows')}</h3>
+          <p className="text-sm text-neutral-500 mb-4">{t('dashboard.chart.rows.subtitle')}</p>
+          {datasets.length === 0 ? (
+            <p className="text-sm text-neutral-500 py-16 text-center">{t('dashboard.chart.empty')}</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={datasets.map((d) => ({ name: d.name, rows: d.row_count }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} interval={0} tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 11)}…` : v)} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => formatNumber(v)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v) => formatNumber(Number(v))} />
+                <Bar dataKey="rows" name={t('data.rows')} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {/* Activity feed */}
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-savanna-600" />
             <h3 className="font-semibold text-neutral-900">{t('dashboard.activity')}</h3>
           </div>
-          <div className="space-y-3 max-h-[240px] overflow-y-auto scrollbar-thin">
-            {recentActivity.map((a) => (
-              <div key={a.id} className="flex items-start gap-3 pb-3 border-b border-neutral-100 last:border-0 last:pb-0">
-                <div className="w-2 h-2 rounded-full bg-savanna-400 mt-1.5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm text-neutral-700">{a.action}</p>
-                  <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {timeAgo(a.time, lang)}
-                  </p>
+          {activity.length === 0 ? (
+            <p className="text-sm text-neutral-500">{t('dashboard.activity.empty')}</p>
+          ) : (
+            <div className="space-y-3 max-h-[240px] overflow-y-auto scrollbar-thin">
+              {activity.map((a) => (
+                <div key={a.id} className="flex items-start gap-3 pb-3 border-b border-neutral-100 last:border-0 last:pb-0">
+                  <div className="w-2 h-2 rounded-full bg-savanna-400 mt-1.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-neutral-700 truncate">{t(`activity.${a.action}`)}{a.metadata?.name ? ` — ${a.metadata.name}` : ''}</p>
+                    <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1"><Clock className="w-3 h-3" /> {timeAgo(a.created_at, lang)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -294,24 +217,16 @@ export function DashboardPage() {
         )}
       </div>
 
-      {/* Weekly activity chart */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-semibold text-neutral-900">{t('dashboard.weekly')}</h3>
-            <p className="text-sm text-neutral-500">{t('dashboard.weekly.subtitle')}</p>
-          </div>
-        </div>
+        <h3 className="font-semibold text-neutral-900">{t('dashboard.weekly')}</h3>
+        <p className="text-sm text-neutral-500 mb-4">{t('dashboard.weekly.subtitle')}</p>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={dashboardChartData.weeklyActivity}>
+          <BarChart data={weekly}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis dataKey="day" stroke="#94a3b8" fontSize={12} />
-            <YAxis stroke="#94a3b8" fontSize={12} />
-            <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
-            <Legend wrapperStyle={{ fontSize: '13px' }} />
-            <Bar dataKey="datasets" name="Datasets" fill="#0ea5e9" radius={[4, 4, 0, 0]} stackId="a" />
-            <Bar dataKey="models" name="Models" fill="#df8429" radius={[4, 4, 0, 0]} stackId="a" />
-            <Bar dataKey="reports" name="Reports" fill="#eab308" radius={[4, 4, 0, 0]} stackId="a" />
+            <YAxis stroke="#94a3b8" fontSize={12} allowDecimals={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Bar dataKey="count" name={t('dashboard.activity')} fill="#df8429" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
