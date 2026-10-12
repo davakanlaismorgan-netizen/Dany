@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/report';
-import type { Model, Dataset } from '@/types';
+import type { Model, Dataset, TaskType } from '@/types';
 
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
@@ -159,44 +159,40 @@ export function ModelsTab({ projectId }: { projectId: string }) {
               onClick={async () => {
                 if (!modelForm.name.trim() || !modelForm.datasetId) return;
                 setTraining(true);
-                const { data, error } = await supabase.from('models').insert({
+                // Démonstration : rien n'est enregistré en base (aucun résultat inventé ne doit y survivre).
+                const modelId = crypto.randomUUID();
+                const now = new Date().toISOString();
+                const isRegression = modelForm.taskType === 'regression';
+                const draft: Model = {
+                  id: modelId,
                   project_id: projectId,
                   dataset_id: modelForm.datasetId,
                   name: modelForm.name,
                   model_type: modelForm.taskType,
-                  task_type: modelForm.taskType,
+                  task_type: modelForm.taskType as TaskType,
                   algorithm: 'auto',
                   status: 'pending',
-                  config: { target_column: modelForm.targetColumn, automl: true },
-                }).select().single();
-                if (!error && data) {
-                  setModels(prev => [data as Model, ...prev]);
-                  setModelForm({ name: '', taskType: 'classification', datasetId: '', targetColumn: '' });
-                  setShowNewModel(false);
-                  // Simulate training progression
-                  const modelId = data.id;
-                  setTimeout(async () => {
-                    await supabase.from('models').update({
-                      status: 'training',
-                    }).eq('id', modelId);
-                    setModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'training' } : m));
-                  }, 1500);
-                  setTimeout(async () => {
-                    const isRegression = modelForm.taskType === 'regression';
-                    const mockMetrics: Record<string, number> = isRegression
-                      ? { rmse: 0.0832, mae: 0.0654, r2: 0.87 + Math.random() * 0.08 }
-                      : { accuracy: 0.86 + Math.random() * 0.1, precision: 0.82 + Math.random() * 0.1, recall: 0.79 + Math.random() * 0.1, f1: 0.81 + Math.random() * 0.08 };
-                    const mockFeatures = ['transaction_count', 'avg_amount', 'days_active', 'balance_trend', 'network_diversity', 'frequency_score']
-                      .reduce((acc, f, i) => ({ ...acc, [f]: [0.28, 0.22, 0.18, 0.12, 0.11, 0.09][i] }), {} as Record<string, number>);
-                    await supabase.from('models').update({
-                      status: 'completed',
-                      algorithm: isRegression ? 'Random Forest' : 'Gradient Boosting',
-                      metrics: mockMetrics,
-                      feature_importance: mockFeatures,
-                    }).eq('id', modelId);
-                    setModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'completed', algorithm: isRegression ? 'Random Forest' : 'Gradient Boosting', metrics: mockMetrics, feature_importance: mockFeatures } : m));
-                  }, 4000);
-                }
+                  config: { target_column: modelForm.targetColumn, automl: true, demo: true },
+                  metrics: {},
+                  feature_importance: {},
+                  user_id: '',
+                  created_at: now,
+                  updated_at: now,
+                };
+                setModels(prev => [draft, ...prev]);
+                setModelForm({ name: '', taskType: 'classification', datasetId: '', targetColumn: '' });
+                setShowNewModel(false);
+                setTimeout(() => {
+                  setModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'training' } : m));
+                }, 1500);
+                setTimeout(() => {
+                  const mockMetrics: Record<string, number> = isRegression
+                    ? { rmse: 0.0832, mae: 0.0654, r2: 0.87 + Math.random() * 0.08 }
+                    : { accuracy: 0.86 + Math.random() * 0.1, precision: 0.82 + Math.random() * 0.1, recall: 0.79 + Math.random() * 0.1, f1: 0.81 + Math.random() * 0.08 };
+                  const mockFeatures = ['transaction_count', 'avg_amount', 'days_active', 'balance_trend', 'network_diversity', 'frequency_score']
+                    .reduce((acc, f, i) => ({ ...acc, [f]: [0.28, 0.22, 0.18, 0.12, 0.11, 0.09][i] }), {} as Record<string, number>);
+                  setModels(prev => prev.map(m => m.id === modelId ? { ...m, status: 'completed', algorithm: isRegression ? 'Random Forest' : 'Gradient Boosting', metrics: mockMetrics, feature_importance: mockFeatures } : m));
+                }, 4000);
                 setTraining(false);
               }}
               disabled={!modelForm.name.trim() || !modelForm.datasetId || training}

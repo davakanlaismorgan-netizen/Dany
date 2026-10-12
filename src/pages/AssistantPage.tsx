@@ -1,5 +1,5 @@
 import { DemoBanner } from '@/components/DemoBanner';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Sparkles, Send, Paperclip, Mic, Trash2, Plus,
   TrendingDown, Lightbulb, BarChart3, Database,
@@ -105,30 +105,6 @@ export default function AssistantPage() {
     loadConversations();
   }, [user]);
 
-  const persistMessages = useCallback(async (msgs: Message[], convId: string | null, title?: string) => {
-    if (!user || msgs.length <= 1) return;
-    const convTitle = title || msgs.find(m => m.role === 'user')?.content.slice(0, 40) || 'New Conversation';
-    if (convId) {
-      await supabase.from('ai_conversations').update({
-        messages: msgs,
-        title: convTitle,
-        updated_at: new Date().toISOString(),
-      }).eq('id', convId);
-      return convId;
-    } else {
-      const { data } = await supabase.from('ai_conversations').insert({
-        messages: msgs,
-        title: convTitle,
-      }).select().single();
-      if (data) {
-        setActiveConvId(data.id);
-        setConversations(prev => [{ id: data.id, title: convTitle, time: data.updated_at }, ...prev]);
-        return data.id;
-      }
-    }
-    return convId;
-  }, [user]);
-
   const handleSend = (prompt?: string) => {
     const text = prompt || input.trim();
     if (!text) return;
@@ -147,8 +123,6 @@ export default function AssistantPage() {
         insights: response.insights,
       };
       setMessages(prev => [...prev, assistantMsg]);
-      const allMsgs = [...messages, userMsg, assistantMsg];
-      void persistMessages(allMsgs, activeConvId, undefined);
       setLoading(false);
     }, 1200);
   };
