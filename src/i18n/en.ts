@@ -382,7 +382,7 @@ export const en: Record<string, string> = {
   'settings.currentplan': 'Current Plan',
   'settings.currentplan.desc': 'Manage your subscription',
   'settings.upgrade.title': 'Upgrade to Premium',
-  'settings.upgrade.desc': 'Unlock unlimited projects, visualizations and rows. Full AutoML, sector modules and teams are coming soon.',
+  'settings.upgrade.desc': 'Unlock unlimited projects, visualizations and rows, and invite up to 10 colleagues. Full AutoML and sector modules are coming soon.',
   'settings.team.title': 'Team Members',
   'settings.team.desc': 'Invite colleagues to collaborate on your projects.',
   'settings.team.invite': 'Invite',
