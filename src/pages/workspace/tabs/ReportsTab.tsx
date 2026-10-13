@@ -10,6 +10,7 @@ import type { Report } from '@/types';
 import { EmptyState, CardSkeleton } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useWorkspace } from '@/lib/workspace';
 
 const reportTemplates = [
   { id: 'exec', nameKey: 'Executive Summary', nameFr: 'Synthèse Exécutive', descEn: 'High-level overview with key metrics and recommendations', descFr: 'Vue d\'ensemble avec métriques clés et recommandations', icon: FileText, format: 'pdf' },
@@ -37,6 +38,7 @@ const formatLabels: Record<string, string> = {
 
 export function ReportsTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
+  const { canWrite } = useWorkspace();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGenerator, setShowGenerator] = useState(false);
@@ -233,13 +235,15 @@ export function ReportsTab({ projectId }: { projectId: string }) {
                     <Clock className="w-3 h-3 animate-pulse" /> {t('reports.generating')}
                   </span>
                 )}
-                <button
-                  onClick={() => handleDelete(report.id)}
-                  disabled={deletingId === report.id}
-                  className="btn-ghost p-2 text-clay-600 disabled:opacity-50"
-                >
-                  {deletingId === report.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                </button>
+                {canWrite && (
+                  <button
+                    onClick={() => handleDelete(report.id)}
+                    disabled={deletingId === report.id}
+                    className="btn-ghost p-2 text-clay-600 disabled:opacity-50"
+                  >
+                    {deletingId === report.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                )}
               </div>
             );
           })}

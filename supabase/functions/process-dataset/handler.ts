@@ -13,6 +13,9 @@ export interface DatasetRow {
 export interface ProcessDeps {
   env: (key: string) => string | undefined;
   getUserId: (authHeader: string) => Promise<string | null>;
+  // Vrai si l'appelant est éditeur (équipe active) de l'espace de travail de `ownerId`.
+  // Décidé par la base (fonction can_write_workspace) avec le jeton de l'appelant.
+  canWriteWorkspace: (authHeader: string, ownerId: string) => Promise<boolean>;
   getDataset: (id: string) => Promise<DatasetRow | null>;
   download: (path: string) => Promise<Uint8Array | null>;
   // Renvoie le message d'erreur de la base, ou null. Le trigger plan_limit:rows peut refuser l'écriture.
@@ -21,9 +24,11 @@ export interface ProcessDeps {
   deleteDataset: (id: string, storagePath: string) => Promise<void>;
 }
 
-// Chemin attendu : <user_id>/<project_id>/<fichier>, sans remontée de dossier.
-export function isOwnedPath(path: unknown, userId: string): path is string {
-  return typeof path === "string" && path.startsWith(`${userId}/`) && !path.split("/").includes("..");
+// Chemin attendu : <id du propriétaire>/<project_id>/<fichier>, sans remontée de dossier.
+// Le dossier est celui du propriétaire du jeu de données, y compris quand c'est un éditeur
+// de l'équipe qui a déposé le fichier.
+export function isOwnedPath(path: unknown, ownerId: string): path is string {
+  return typeof path === "string" && path.startsWith(`${ownerId}/`) && !path.split("/").includes("..");
 }
 
 export async function handleProcess(req: Request, deps: ProcessDeps): Promise<Response> {
@@ -41,11 +46,15 @@ export async function handleProcess(req: Request, deps: ProcessDeps): Promise<Re
   } catch { /* corps invalide */ }
   if (!isUuid(datasetId)) return jsonResponse(cors, { error: "invalid_request" }, 400);
 
-  // Même réponse pour « inexistant » et « appartient à un autre » : pas d'énumération.
+  // Même réponse pour « inexistant » et « accès refusé » : pas d'énumération.
+  // Autorisé : le propriétaire, ou un éditeur actif de son équipe (jamais un viewer).
   const ds = await deps.getDataset(datasetId);
-  if (!ds || ds.user_id !== userId) return jsonResponse(cors, { error: "not_found" }, 404);
+  if (!ds) return jsonResponse(cors, { error: "not_found" }, 404);
+  if (ds.user_id !== userId && !(await deps.canWriteWorkspace(authHeader!, ds.user_id))) {
+    return jsonResponse(cors, { error: "not_found" }, 404);
+  }
   const path = ds.source_config?.storage_path;
-  if (!isOwnedPath(path, userId)) {
+  if (!isOwnedPath(path, ds.user_id)) {
     await deps.markFailed(ds.id, "invalid_path");
     return jsonResponse(cors, { error: "invalid_path" }, 400);
   }

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { I18nProvider } from '@/context/I18nContext';
 
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+
 const h = vi.hoisted(() => ({ fail: false }));
 
 vi.mock('@/lib/supabase', () => {
@@ -17,7 +19,7 @@ vi.mock('@/lib/supabase', () => {
   const chain = (table: string): unknown => {
     const p = Promise.resolve(result(table));
     const c: Record<string, unknown> = {};
-    for (const m of ['select', 'order', 'limit']) c[m] = () => c;
+    for (const m of ['select', 'order', 'limit', 'eq']) c[m] = () => c;
     c.then = p.then.bind(p);
     return c;
   };

@@ -5,16 +5,22 @@ const url = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
+const asUser = (authHeader: string) =>
+  createClient(url, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false },
+  });
+
 Deno.serve((req) =>
   handleProcess(req, {
     env: (k) => Deno.env.get(k),
     getUserId: async (authHeader) => {
-      const userClient = createClient(url, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false },
-      });
-      const { data, error } = await userClient.auth.getUser();
+      const { data, error } = await asUser(authHeader).auth.getUser();
       return error || !data.user ? null : data.user.id;
+    },
+    canWriteWorkspace: async (authHeader, ownerId) => {
+      const { data, error } = await asUser(authHeader).rpc("can_write_workspace", { p_owner: ownerId });
+      return !error && data === true;
     },
     getDataset: async (id) => {
       const { data } = await admin.from("datasets").select("id, user_id, source_type, source_config").eq("id", id).maybeSingle();

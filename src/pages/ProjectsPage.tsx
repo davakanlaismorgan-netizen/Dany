@@ -8,6 +8,8 @@ import { sectorConfig } from '@/lib/sectors';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useAuth } from '@/context/AuthContext';
+import { listWorkspaces, type Workspace } from '@/lib/team';
 
 const sectorColors: Record<string, string> = {
   finance: '#df8429',
@@ -19,7 +21,11 @@ const sectorColors: Record<string, string> = {
 };
 
 export function ProjectsPage() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [projects, setProjects] = useState<Project[]>([]);
+  const [shared, setShared] = useState<Project[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -43,19 +49,35 @@ export function ProjectsPage() {
       setLoading(true);
       setLoadError(false);
       try {
-        const { data, error } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
-        if (error) throw error;
-        setProjects((data as Project[]) ?? []);
+        if (!userId) return;
+        // « Mes projets » = ceux dont je suis propriétaire ; les autres (équipes rejointes) vont dans « Partagés avec moi ».
+        const [own, others] = await Promise.all([
+          supabase.from('projects').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
+          supabase.from('projects').select('*').neq('user_id', userId).order('updated_at', { ascending: false }),
+        ]);
+        if (own.error) throw own.error;
+        setProjects((own.data as Project[]) ?? []);
+        // Le partage est un bonus : une erreur ici ne doit pas masquer mes propres projets.
+        if (others.error) {
+          reportError(others.error, { where: 'ProjectsPage.shared' });
+          setShared([]);
+        } else {
+          setShared((others.data as Project[]) ?? []);
+          if ((others.data ?? []).length > 0) {
+            try { setWorkspaces(await listWorkspaces()); } catch (e) { reportError(e, { where: 'ProjectsPage.workspaces' }); }
+          }
+        }
       } catch (err) {
         reportError(err, { where: 'ProjectsPage.load#1' });
         setProjects([]);
+        setShared([]);
         setLoadError(true);
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [reloadKey]);
+  }, [reloadKey, userId]);
 
   const filtered = projects.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -193,6 +215,36 @@ export function ProjectsPage() {
             );
           })}
         </div>
+      )}
+
+      {!loading && !loadError && shared.length > 0 && (
+        <section aria-labelledby="shared-projects" className="space-y-3">
+          <h2 id="shared-projects" className="text-lg font-display font-semibold text-neutral-900">{t('projects.shared.title')}</h2>
+          <div className="card divide-y divide-neutral-100">
+            {shared.map((project) => {
+              const ws = workspaces.find((w) => w.owner_id === project.user_id);
+              const sector = sectorConfig[project.sector] || sectorConfig.general;
+              return (
+                <Link key={project.id} to={`/projects/${project.id}`} className="flex items-center gap-4 p-4 hover:bg-neutral-50 transition-colors">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-semibold shrink-0"
+                    style={{ backgroundColor: sectorColors[project.sector] || '#64748b' }}
+                  >
+                    {sector.label[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-neutral-900 truncate">{project.name}</h3>
+                    <p className="text-sm text-neutral-500 truncate">
+                      {t('projects.shared.by')} {ws?.owner_name || ws?.owner_email || '—'}
+                    </p>
+                  </div>
+                  {ws && <span className="badge-neutral">{t(`team.role.${ws.role}`)}</span>}
+                  <span className="text-xs text-neutral-400 hidden md:block w-24 text-right">{timeAgo(project.updated_at, lang)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );

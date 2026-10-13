@@ -2,20 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   ranges: [] as [string, number, number][],
+  filters: [] as [string, string, string][],
   rowsFor: ((): { data: unknown[] | null; error: { message: string } | null } => ({ data: [], error: null })) as (t: string, from: number) => { data: unknown[] | null; error: { message: string } | null },
 }));
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => ({
-      select: () => ({
-        order: () => ({
-          range: (from: number, to: number) => {
-            h.ranges.push([table, from, to]);
-            return Promise.resolve(h.rowsFor(table, from));
-          },
-        }),
-      }),
+      select: () => {
+        const q = {
+          eq: (col: string, val: string) => { h.filters.push([table, col, val]); return q; },
+          order: () => ({
+            range: (from: number, to: number) => {
+              h.ranges.push([table, from, to]);
+              return Promise.resolve(h.rowsFor(table, from));
+            },
+          }),
+        };
+        return q;
+      },
     }),
   },
 }));
@@ -24,6 +29,7 @@ import { collectUserData, EXPORT_TABLES } from '@/lib/exportData';
 
 beforeEach(() => {
   h.ranges = [];
+  h.filters = [];
   h.rowsFor = () => ({ data: [], error: null });
 });
 
@@ -33,6 +39,14 @@ describe('collectUserData', () => {
     expect(Object.keys(r.tables).sort()).toEqual([...EXPORT_TABLES].sort());
     expect(r.user_id).toBe('u1');
     expect(r.errors).toEqual([]);
+  });
+
+  it("n'exporte que les lignes dont l'utilisateur est propriétaire (jamais celles d'un espace partagé)", async () => {
+    await collectUserData('u1');
+    const owned = ['projects', 'datasets', 'pipelines', 'models', 'visualizations', 'reports'];
+    for (const t of owned) expect(h.filters).toContainEqual([t, 'user_id', 'u1']);
+    // les autres tables ne sont pas filtrées par user_id (leurs règles RLS ne partagent rien)
+    expect(h.filters.filter(([t]) => !owned.includes(t))).toEqual([]);
   });
 
   it('pagine au-delà de 1000 lignes sans rien perdre', async () => {

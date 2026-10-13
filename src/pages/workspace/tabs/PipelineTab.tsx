@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/report';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useWorkspace } from '@/lib/workspace';
 import type { PipelineNode, PipelineEdge } from '@/types';
 
 interface PipelineNodeData {
@@ -79,6 +80,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; dot: 
 
 export function PipelineTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
+  const { canWrite } = useWorkspace();
   const [nodes, setNodes] = useState<PipelineNodeData[]>([
     { id: 'n1', type: 'csv_import', label: 'CSV Import', icon: Upload, category: 'pipeline.cat.data', x: 80, y: 120, color: 'ocean' },
     { id: 'n2', type: 'clean', label: 'Data Cleaning', icon: Filter, category: 'pipeline.cat.transform', x: 340, y: 120, color: 'gold' },
@@ -259,9 +261,11 @@ export function PipelineTab({ projectId }: { projectId: string }) {
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleSave} disabled={saving} className="btn-secondary text-sm py-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {savedFlash ? (lang === 'fr' ? 'Enregistré !' : 'Saved!') : t('pipeline.save')}
-            </button>
+            {canWrite && (
+              <button onClick={handleSave} disabled={saving} className="btn-secondary text-sm py-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {savedFlash ? (lang === 'fr' ? 'Enregistré !' : 'Saved!') : t('pipeline.save')}
+              </button>
+            )}
             <button onClick={runPipeline} disabled={running} className="btn-primary text-sm py-2">
               <Play className="w-4 h-4" /> {running ? t('pipeline.running') : t('pipeline.run')}
             </button>

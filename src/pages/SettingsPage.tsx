@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   User, Building2, Mail, Phone, Globe, CreditCard, Users,
-  Bell, Shield, Save, Check, Crown, Zap, Plus, Trash2,
+  Bell, Shield, Save, Check, Crown, Zap, Trash2,
   Lock, LogOut, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +14,7 @@ import { collectUserData, downloadJson } from '@/lib/exportData';
 import { reportError } from '@/lib/report';
 import { BillingDetails } from '@/components/BillingDetails';
 import { CheckoutBanner } from '@/components/CheckoutBanner';
+import { TeamPanel } from '@/components/TeamPanel';
 import { formatXof, PREMIUM_PRICE_XOF } from '@/lib/plans';
 
 const tabs = [
@@ -385,40 +386,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'team' && (
-            <div className="card p-6 animate-fade-in">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-semibold text-neutral-900">{t('settings.team.title')}</h2>
-                  <p className="text-sm text-neutral-500 mt-1">{t('settings.team.desc')}</p>
-                </div>
-                <button type="button" disabled className="btn-primary text-sm opacity-50 cursor-not-allowed" aria-describedby="team-soon">
-                  <Plus className="w-4 h-4" /> {t('settings.team.invite')}
-                </button>
-              </div>
-
-              <div role="note" id="team-soon" className="mb-4 p-3 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800">{t('demo.team')}</div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-savanna-400 to-clay-500 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                    {(profile?.full_name || user?.email || '?')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-neutral-800">{profile?.full_name || user?.email}</p>
-                    <p className="text-xs text-neutral-400 truncate">{user?.email}</p>
-                  </div>
-                  <span className="badge badge-savanna">Admin</span>
-                </div>
-              </div>
-
-              {profile?.plan === 'free' && (
-                <div className="mt-4 p-4 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800">
-                  {t('settings.upgrade.desc')}
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'team' && <TeamPanel />}
 
           {activeTab === 'notifications' && (
             <div className="card p-6 animate-fade-in">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Receipt } from 'lucide-react';
 import { useI18n } from '@/context/I18nContext';
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/report';
 import { FREE_LIMITS, formatXof } from '@/lib/plans';
@@ -14,20 +15,24 @@ interface Usage { projects: number; visualizations: number; maxRows: number }
 
 export function BillingDetails({ isFree }: { isFree: boolean }) {
   const { t, lang } = useI18n();
+  const { user } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function load() {
+    if (!user) return;
     setLoading(true);
     setFailed(false);
     try {
+      // Consommation = MES données : la RLS laisse aussi lire l'espace d'un propriétaire qui m'a invité.
+      const uid = user.id;
       const [pay, proj, viz, ds] = await Promise.all([
         supabase.from('payments').select('id, transaction_id, plan, amount, method, provider, created_at, refunded_at').order('created_at', { ascending: false }).limit(50),
-        supabase.from('projects').select('id', { count: 'exact', head: true }),
-        supabase.from('visualizations').select('id', { count: 'exact', head: true }),
-        supabase.from('datasets').select('row_count').order('row_count', { ascending: false }).limit(1),
+        supabase.from('projects').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+        supabase.from('visualizations').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+        supabase.from('datasets').select('row_count').eq('user_id', uid).order('row_count', { ascending: false }).limit(1),
       ]);
       const err = [pay, proj, viz, ds].find((r) => r.error)?.error;
       if (err) throw err;
@@ -43,7 +48,8 @@ export function BillingDetails({ isFree }: { isFree: boolean }) {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (failed) return <ErrorState message={t('common.error')} onRetry={load} />;
   const locale = lang === 'fr' ? 'fr-FR' : 'en-US';

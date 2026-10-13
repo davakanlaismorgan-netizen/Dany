@@ -11,6 +11,7 @@ import { processDataset } from '@/lib/processDataset';
 import { logActivity } from '@/lib/activity';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useWorkspace } from '@/lib/workspace';
 import type { Dataset } from '@/types';
 
 import { DataPreview } from './DataPreview';
@@ -43,6 +44,8 @@ const sourceLabels: Record<string, string> = {
 export function DataTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const ws = useWorkspace();
+  const canWrite = ws.canWrite;
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -90,7 +93,8 @@ export function DataTab({ projectId }: { projectId: string }) {
     setUploading(true);
     setUploadError(null);
 
-    const filePath = `${user.id}/${projectId}/${Date.now()}_${sanitizeFilename(file.name)}`;
+    // Dossier du PROPRIÉTAIRE du projet (un éditeur écrit dans l'espace du propriétaire).
+    const filePath = `${ws.ownerId ?? user.id}/${projectId}/${Date.now()}_${sanitizeFilename(file.name)}`;
     let datasetId: string | null = null;
     try {
       const { error: storageError } = await supabase.storage.from('datasets').upload(filePath, file);
@@ -173,12 +177,14 @@ export function DataTab({ projectId }: { projectId: string }) {
           <h2 className="text-lg font-semibold text-neutral-900">{t('data.title')}</h2>
           <p className="text-sm text-neutral-500 mt-1">{datasets.length} {t('data.subtitle')}</p>
         </div>
-        <button onClick={() => setShowUpload(!showUpload)} className="btn-primary">
-          <Upload className="w-4 h-4" /> {t('data.upload')}
-        </button>
+        {canWrite && (
+          <button onClick={() => setShowUpload(!showUpload)} className="btn-primary">
+            <Upload className="w-4 h-4" /> {t('data.upload')}
+          </button>
+        )}
       </div>
 
-      {showUpload && (
+      {canWrite && showUpload && (
         <div className="card p-6 animate-slide-up">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-neutral-900">{t('data.addsource')}</h3>
@@ -270,7 +276,7 @@ export function DataTab({ projectId }: { projectId: string }) {
             icon={<Database className="w-8 h-8" />}
             title={t('data.empty.title')}
             description={t('data.empty.desc')}
-            action={<button onClick={() => setShowUpload(true)} className="btn-primary"><Upload className="w-4 h-4" /> {t('data.upload')}</button>}
+            action={canWrite ? <button onClick={() => setShowUpload(true)} className="btn-primary"><Upload className="w-4 h-4" /> {t('data.upload')}</button> : undefined}
           />
         </div>
       ) : (
@@ -309,14 +315,16 @@ export function DataTab({ projectId }: { projectId: string }) {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleDeleteDataset(ds)}
-                        disabled={deletingId === ds.id}
-                        className="btn-ghost p-2 text-xs text-clay-600 hover:bg-clay-50 disabled:opacity-50"
-                        aria-label="Delete"
-                      >
-                        {deletingId === ds.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
+                      {canWrite && (
+                        <button
+                          onClick={() => handleDeleteDataset(ds)}
+                          disabled={deletingId === ds.id}
+                          className="btn-ghost p-2 text-xs text-clay-600 hover:bg-clay-50 disabled:opacity-50"
+                          aria-label="Delete"
+                        >
+                          {deletingId === ds.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

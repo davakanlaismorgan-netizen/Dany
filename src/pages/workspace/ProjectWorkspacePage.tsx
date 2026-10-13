@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Routes, Route, NavLink, Link } from 'react-router-dom';
+import { useParams, Routes, Route, NavLink, Link, Navigate } from 'react-router-dom';
 import {
   Database, Workflow, Sparkles, BarChart3, FileText,
   ChevronRight, Landmark, ShoppingBag, Sprout, HeartPulse, Truck, Settings,
@@ -11,6 +11,9 @@ import { sectorConfig } from '@/lib/sectors';
 import { FullPageLoader, ErrorState } from '@/components/ui/Loading';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useAuth } from '@/context/AuthContext';
+import { listWorkspaces } from '@/lib/team';
+import { WorkspaceContext, accessFor, type WorkspaceAccess } from '@/lib/workspace';
 import { DataTab } from './tabs/DataTab';
 import { PipelineTab } from './tabs/PipelineTab';
 import { ModelsTab } from './tabs/ModelsTab';
@@ -37,7 +40,10 @@ const tabs = [
 export function ProjectWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [project, setProject] = useState<Project | null>(null);
+  const [access, setAccess] = useState<WorkspaceAccess | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -51,8 +57,20 @@ export function ProjectWorkspacePage() {
       try {
         const { data, error } = await supabase.from('projects').select('*').eq('id', id).maybeSingle();
         if (error) throw error;
-        if (data) {
-          setProject(data as Project);
+        if (data && userId) {
+          const p = data as Project;
+          // Mon projet : propriétaire. Sinon : mon rôle dans l'équipe du propriétaire (lecture seule par défaut :
+          // l'interface ne fait qu'adapter l'affichage, la base impose les vrais droits).
+          let role: 'editor' | 'viewer' | null = null;
+          if (p.user_id !== userId) {
+            try {
+              role = (await listWorkspaces()).find((w) => w.owner_id === p.user_id)?.role ?? null;
+            } catch (e) {
+              reportError(e, { where: 'ProjectWorkspacePage.role' });
+            }
+          }
+          setAccess(accessFor(p.user_id, userId, role));
+          setProject(p);
         } else {
           setError(true);
         }
@@ -64,15 +82,16 @@ export function ProjectWorkspacePage() {
       }
     }
     loadProject();
-  }, [id]);
+  }, [id, userId]);
 
   if (loading) return <FullPageLoader />;
-  if (error || !project) return <ErrorState message={t('common.error')} onRetry={() => window.location.reload()} />;
+  if (error || !project || !access) return <ErrorState message={t('common.error')} onRetry={() => window.location.reload()} />;
 
   const SectorIcon = sectorIcons[project.sector] || Database;
   const sector = sectorConfig[project.sector] || sectorConfig.general;
 
   return (
+    <WorkspaceContext.Provider value={access}>
     <div className="min-h-full">
       {/* Project header */}
       <div className="bg-white border-b border-neutral-200 px-6 lg:px-8 pt-6">
@@ -103,9 +122,11 @@ export function ProjectWorkspacePage() {
                 </div>
               </div>
             </div>
-            <Link to={`/projects/${project.id}/settings`} className="btn-ghost text-sm hidden sm:flex">
-              <Settings className="w-4 h-4" /> {t('settings.title')}
-            </Link>
+            {access.isOwner && (
+              <Link to={`/projects/${project.id}/settings`} className="btn-ghost text-sm hidden sm:flex">
+                <Settings className="w-4 h-4" /> {t('settings.title')}
+              </Link>
+            )}
           </div>
 
           {/* Tabs */}
@@ -132,6 +153,14 @@ export function ProjectWorkspacePage() {
         </div>
       </div>
 
+      {!access.isOwner && (
+        <div role="note" className="max-w-7xl mx-auto px-6 lg:px-8 pt-4">
+          <div className="p-3 rounded-xl bg-ocean-50 border border-ocean-200 text-sm text-ocean-800">
+            {t(access.canWrite ? 'workspace.shared.editor' : 'workspace.shared.viewer')}
+          </div>
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="max-w-7xl mx-auto">
         <Routes>
@@ -141,9 +170,13 @@ export function ProjectWorkspacePage() {
           <Route path="models" element={<ModelsTab projectId={project.id} />} />
           <Route path="visualizations" element={<VisualizationsTab projectId={project.id} />} />
           <Route path="reports" element={<ReportsTab projectId={project.id} />} />
-          <Route path="settings" element={<ProjectSettingsTab projectId={project.id} project={project} />} />
+          <Route
+            path="settings"
+            element={access.isOwner ? <ProjectSettingsTab projectId={project.id} project={project} /> : <Navigate to={`/projects/${project.id}/data`} replace />}
+          />
         </Routes>
       </div>
     </div>
+    </WorkspaceContext.Provider>
   );
 }
