@@ -205,22 +205,10 @@ export function PipelineTab({ projectId }: { projectId: string }) {
     setSelectedNode(null);
   };
 
-  const runPipeline = async () => {
+  // Démonstration : l'exécution est simulée et n'écrit aucun statut en base.
+  const runPipeline = () => {
     setRunning(true);
-    try {
-      if (pipelineId) {
-        await supabase.from('pipelines').update({ status: 'running' }).eq('id', pipelineId);
-      }
-      setTimeout(async () => {
-        setRunning(false);
-        if (pipelineId) {
-          await supabase.from('pipelines').update({ status: 'completed' }).eq('id', pipelineId);
-        }
-      }, 2000);
-    } catch (err) {
-      reportError(err, { where: 'PipelineTab#2' });
-      setRunning(false);
-    }
+    setTimeout(() => setRunning(false), 2000);
   };
 
   return (

@@ -68,30 +68,22 @@ export function ReportsTab({ projectId }: { projectId: string }) {
     setGenerating(true);
     try {
       const name = `${lang === 'fr' ? tpl.nameFr : tpl.nameKey} — ${new Date().toLocaleDateString()}`;
-      const { data, error } = await supabase
-        .from('reports')
-        .insert({
-          project_id: projectId,
-          name,
-          format: tpl.format,
-          status: 'generating',
-          config: { template: tpl.id },
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      if (data) {
-        setReports(prev => [data as Report, ...prev]);
-        // Simulate generation completion
-        const reportId = data.id;
-        setTimeout(async () => {
-          await supabase.from('reports').update({
-            status: 'completed',
-            file_url: `reports/${projectId}/${reportId}.${tpl.format}`,
-          }).eq('id', reportId);
-          setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'completed', file_url: `reports/${projectId}/${reportId}.${tpl.format}` } : r));
-        }, 2500);
-      }
+      // Démonstration : rien n'est enregistré en base et aucun fichier n'est produit.
+      const draft: Report = {
+        id: crypto.randomUUID(),
+        project_id: projectId,
+        name,
+        format: tpl.format,
+        status: 'generating',
+        config: { template: tpl.id, demo: true },
+        file_url: null,
+        user_id: '',
+        created_at: new Date().toISOString(),
+      };
+      setReports(prev => [draft, ...prev]);
+      setTimeout(() => {
+        setReports(prev => prev.map(r => r.id === draft.id ? { ...r, status: 'completed' } : r));
+      }, 2500);
       setShowGenerator(false);
       setSelectedTemplate(null);
     } catch (err) {
