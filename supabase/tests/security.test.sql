@@ -63,6 +63,26 @@ begin
   end;
 end $$;
 
+-- Attend qu'une écriture (insert/update/delete) touche exactement `p_expected` lignes
+-- (la RLS filtre silencieusement les lignes interdites : 0 ligne = refus).
+create function tests.expect_rows(p_label text, p_role text, p_uid uuid, p_email text, p_stmt text, p_expected int)
+returns void language plpgsql as $$
+declare v int;
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid, 'email', p_email, 'role', p_role)::text, true);
+  execute format('set local role %I', p_role);
+  begin
+    execute p_stmt;
+    get diagnostics v = row_count;
+    reset role;
+    insert into tests.results (label, ok, detail) values (p_label, v = p_expected, 'lignes=' || v || ' attendu=' || p_expected);
+  exception when others then
+    reset role;
+    insert into tests.results (label, ok, detail) values (p_label, false, sqlerrm);
+  end;
+end $$;
+
 -- Jeu d'essai : deux utilisateurs (le trigger crée profil + abonnement gratuit)
 insert into auth.users (id, email, raw_user_meta_data) values
   ('aaaaaaaa-0000-0000-0000-00000000000a', 'a@test.dev', '{"full_name":"Alice","company":"AcmeCo"}'),
@@ -142,13 +162,9 @@ select tests.expect_fail('ATTAQUE: modifier activity_log', 'authenticated', :A::
 select tests.expect_fail('ATTAQUE: supprimer activity_log', 'authenticated', :A::uuid, 'a@test.dev',
   $q$delete from public.activity_log$q$, 'permission denied');
 
--- ===== Équipe =====
-select tests.expect_ok('légitime: A invite B', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.team_members (owner_id, member_email) values ('aaaaaaaa-0000-0000-0000-00000000000a','B@test.dev')$q$);
-select tests.expect_val('B voit son invitation (sans lire auth.users)', 'authenticated', :B::uuid, 'b@test.dev',
-  $q$select count(*) from public.team_members$q$, '1');
-select tests.expect_fail('ATTAQUE: B s''ajoute dans l''équipe de A', 'authenticated', :B::uuid, 'b@test.dev',
-  $q$insert into public.team_members (owner_id, member_email) values ('aaaaaaaa-0000-0000-0000-00000000000a','b@test.dev')$q$, 'row-level security');
+-- ===== Équipe (plan gratuit) =====
+select tests.expect_fail('ATTAQUE: un propriétaire gratuit ne peut pas inviter', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('b@test.dev','viewer')$q$, 'row-level security');
 
 -- ===== Limites du plan gratuit =====
 select tests.expect_ok('free: 2e projet', 'authenticated', :A::uuid, 'a@test.dev',
@@ -291,6 +307,271 @@ select tests.expect_fail('ATTAQUE: un client ne peut pas appeler register_verify
   $q$select public.register_verify_attempt('dddddddd-0000-0000-0000-00000000000d', 1000)$q$, 'permission denied');
 select tests.expect_fail('ATTAQUE: un client ne peut pas lire verify_attempts', 'authenticated', 'dddddddd-0000-0000-0000-00000000000d'::uuid, 'd@test.dev',
   $q$select count(*) from public.verify_attempts$q$, 'permission denied');
+
+-- ===== Collaboration d'équipe =====
+-- A = propriétaire (redevient Premium), B = membre viewer, C = membre editor,
+-- F = invité dont l'e-mail n'est PAS confirmé, E = étranger (aucun lien avec A).
+\set C '''cccccccc-0000-0000-0000-00000000000c'''
+\set F '''ffffffff-0000-0000-0000-00000000000f'''
+\set E '''eeeeeeee-0000-0000-0000-00000000000e'''
+
+insert into auth.users (id, email, email_confirmed_at) values
+  ('cccccccc-0000-0000-0000-00000000000c', 'c@test.dev', now()),
+  ('ffffffff-0000-0000-0000-00000000000f', 'f@test.dev', null);
+insert into public.projects (id, name, user_id) values
+  ('cccccccc-1111-0000-0000-000000000001', 'Projet C', 'cccccccc-0000-0000-0000-00000000000c');
+insert into public.pipelines (id, project_id, name, user_id) values
+  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'Pipeline A1', 'aaaaaaaa-0000-0000-0000-00000000000a');
+insert into public.ai_conversations (title, user_id) values ('conv A', 'aaaaaaaa-0000-0000-0000-00000000000a');
+insert into storage.objects (bucket_id, name) values
+  ('datasets', 'aaaaaaaa-0000-0000-0000-00000000000a/team/partage.csv');
+
+-- Propriétaire dont l'abonnement a expiré : plus d'invitation possible
+select tests.expect_fail('ATTAQUE: propriétaire au plan expiré ne peut pas inviter', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('b@test.dev','viewer')$q$, 'row-level security');
+
+select tests.expect_ok('A redevient premium (TX-T1)', 'service_role', null, null,
+  $q$select public.activate_plan('aaaaaaaa-0000-0000-0000-00000000000a','premium','kkiapay','TX-T1',17900,'XOF','momo',1)$q$);
+
+-- ----- Invitations : ce que le client peut / ne peut pas écrire -----
+select tests.expect_ok('légitime: A invite B (viewer)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('B@test.dev','viewer')$q$);
+select tests.expect_ok('légitime: A invite C (editor)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('c@test.dev','editor')$q$);
+select tests.expect_ok('légitime: A invite F (e-mail non confirmé)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('f@test.dev','viewer')$q$);
+select tests.expect_fail('ATTAQUE: s''inviter soi-même', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('A@test.dev','editor')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE: invitation en double (casse différente)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('b@TEST.dev','viewer')$q$, 'duplicate key');
+select tests.expect_fail('ATTAQUE: rôle inventé', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('x@test.dev','admin')$q$, 'role_check');
+select tests.expect_fail('ATTAQUE: e-mail invalide', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('pas-un-email','viewer')$q$, 'email_check');
+select tests.expect_fail('ATTAQUE: écrire status à l''insertion', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, status) values ('x@test.dev','accepted')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: écrire member_id à l''insertion', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, member_id) values ('x@test.dev','eeeeeeee-0000-0000-0000-00000000000e')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: choisir owner_id à l''insertion', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.team_members (owner_id, member_email) values ('aaaaaaaa-0000-0000-0000-00000000000a','b@test.dev')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A s''accorde lui-même status=accepted', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set status = 'accepted' where lower(member_email) = 'b@test.dev'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A écrit member_id', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set member_id = 'eeeeeeee-0000-0000-0000-00000000000e' where lower(member_email) = 'b@test.dev'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A change l''e-mail d''une invitation', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set member_email = 'e@test.dev' where lower(member_email) = 'b@test.dev'$q$, 'permission denied');
+select tests.expect_rows('légitime: A change le rôle d''une invitation', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set role = 'viewer' where lower(member_email) = 'b@test.dev'$q$, 1);
+select tests.expect_val('E ne voit aucune ligne d''équipe', 'authenticated', :E::uuid, 'e@test.dev',
+  $q$select count(*) from public.team_members$q$, '0');
+
+-- ----- Avant acceptation : aucun accès -----
+select tests.expect_val('invitation en attente: B ne voit pas le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '0');
+select tests.expect_val('B voit son invitation via my_invitations()', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.my_invitations()$q$, '1');
+select tests.expect_val('F (e-mail non confirmé) ne voit aucune invitation', 'authenticated', :F::uuid, 'f@test.dev',
+  $q$select count(*) from public.my_invitations()$q$, '0');
+select tests.expect_fail('ATTAQUE: accepter avec un e-mail non confirmé', 'authenticated', :F::uuid, 'f@test.dev',
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'f@test.dev')),
+  'email_not_confirmed');
+select tests.expect_fail('ATTAQUE: E accepte l''invitation de B', 'authenticated', :E::uuid, 'e@test.dev',
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')),
+  'invitation_not_found');
+select tests.expect_fail('ATTAQUE: E refuse l''invitation de B', 'authenticated', :E::uuid, 'e@test.dev',
+  format($q$select public.decline_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')),
+  'invitation_not_found');
+select tests.expect_fail('ATTAQUE: accepter (anon)', 'anon', null, null,
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')),
+  'permission denied');
+select tests.expect_fail('ATTAQUE: lire my_invitations (anon)', 'anon', null, null,
+  $q$select count(*) from public.my_invitations()$q$, 'permission denied');
+
+-- ----- Acceptation -----
+select tests.expect_ok('légitime: B accepte', 'authenticated', :B::uuid, 'b@test.dev',
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')));
+select tests.expect_ok('légitime: C accepte', 'authenticated', :C::uuid, 'c@test.dev',
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'c@test.dev')));
+select tests.expect_fail('ATTAQUE: rejouer l''acceptation', 'authenticated', :B::uuid, 'b@test.dev',
+  format($q$select public.accept_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')),
+  'invitation_not_found');
+select tests.expect_val('statut accepté et lié au compte de B', 'postgres', null, null,
+  $q$select (status = 'accepted' and member_id = 'bbbbbbbb-0000-0000-0000-00000000000b')::text from public.team_members where lower(member_email) = 'b@test.dev'$q$, 'true');
+select tests.expect_val('B: my_workspaces() = A en viewer', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select owner_id::text || ':' || role from public.my_workspaces()$q$, 'aaaaaaaa-0000-0000-0000-00000000000a:viewer');
+
+-- ----- Viewer (B) : lecture seule -----
+select tests.expect_val('viewer: voit le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '1');
+select tests.expect_val('viewer: voit le dataset de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, '1');
+select tests.expect_fail('ATTAQUE viewer: ajouter un dataset chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','intrus')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE viewer: ajouter un pipeline chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.pipelines (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','intrus')$q$, 'row-level security');
+select tests.expect_rows('ATTAQUE viewer: renommer un dataset de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$update public.datasets set name = 'piraté' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 0);
+select tests.expect_rows('ATTAQUE viewer: modifier un pipeline de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$update public.pipelines set name = 'piraté' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$q$, 0);
+select tests.expect_rows('ATTAQUE viewer: supprimer un dataset de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$delete from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 0);
+select tests.expect_rows('ATTAQUE viewer: supprimer le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$delete from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, 0);
+select tests.expect_fail('ATTAQUE viewer: créer un projet chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.projects (name, user_id) values ('intrus','aaaaaaaa-0000-0000-0000-00000000000a')$q$, 'row-level security');
+
+-- ----- Ce qu'un membre ne voit jamais -----
+select tests.expect_val('membre: pas le profil du propriétaire', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.profiles where id = 'aaaaaaaa-0000-0000-0000-00000000000a'$q$, '0');
+select tests.expect_val('membre: pas l''abonnement du propriétaire', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.subscriptions where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a'$q$, '0');
+select tests.expect_val('membre: pas les paiements du propriétaire', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.payments$q$, '0');
+select tests.expect_val('membre: pas les conversations du propriétaire', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.ai_conversations$q$, '0');
+select tests.expect_val('membre: pas les préférences du propriétaire', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.notification_preferences where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a'$q$, '0');
+select tests.expect_val('membre: pas le journal d''activité du propriétaire', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.activity_log where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a'$q$, '0');
+select tests.expect_val('B ne voit que sa propre ligne d''équipe', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.team_members$q$, '1');
+
+-- ----- Gestion de l'équipe : réservée au propriétaire -----
+select tests.expect_rows('ATTAQUE membre: supprimer la ligne d''un autre membre', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from public.team_members where lower(member_email) = 'b@test.dev'$q$, 0);
+select tests.expect_rows('ATTAQUE editor: passer B en editor', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.team_members set role = 'editor' where lower(member_email) = 'b@test.dev'$q$, 0);
+select tests.expect_rows('ATTAQUE viewer: se promouvoir editor', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$update public.team_members set role = 'editor' where lower(member_email) = 'b@test.dev'$q$, 0);
+select tests.expect_fail('ATTAQUE membre: inviter chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('x@test.dev','viewer')$q$, 'row-level security');
+
+-- ----- Editor (C) -----
+select tests.expect_ok('editor: ajoute un dataset dans le projet de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','ds par C')$q$);
+select tests.expect_val('la ligne appartient à A, l''auteur est C', 'postgres', null, null,
+  $q$select (user_id = 'aaaaaaaa-0000-0000-0000-00000000000a' and created_by = 'cccccccc-0000-0000-0000-00000000000c')::text from public.datasets where name = 'ds par C'$q$, 'true');
+select tests.expect_val('A voit le dataset ajouté par C', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select count(*) from public.datasets where name = 'ds par C'$q$, '1');
+select tests.expect_ok('editor: ajoute un pipeline en usurpant user_id et created_by', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.pipelines (project_id, name, user_id, created_by) values ('aaaaaaaa-1111-0000-0000-000000000001','pipe C','cccccccc-0000-0000-0000-00000000000c','bbbbbbbb-0000-0000-0000-00000000000b')$q$);
+select tests.expect_val('usurpation écrasée: user_id = A, created_by = C', 'postgres', null, null,
+  $q$select (user_id = 'aaaaaaaa-0000-0000-0000-00000000000a' and created_by = 'cccccccc-0000-0000-0000-00000000000c')::text from public.pipelines where name = 'pipe C'$q$, 'true');
+select tests.expect_fail('ATTAQUE editor: effacer l''auteur d''une ligne', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.pipelines set created_by = null where name = 'pipe C'$q$, 'owner_immutable');
+select tests.expect_fail('ATTAQUE editor: s''attribuer la paternité d''une ligne', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.pipelines set created_by = 'bbbbbbbb-0000-0000-0000-00000000000b' where name = 'pipe C'$q$, 'owner_immutable');
+select tests.expect_rows('editor: renomme un dataset de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.datasets set name = 'renommé par C' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 1);
+select tests.expect_rows('editor: modifie un pipeline de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.pipelines set name = 'modifié par C' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$q$, 1);
+select tests.expect_rows('editor: supprime un pipeline de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from public.pipelines where name = 'pipe C'$q$, 1);
+select tests.expect_ok('editor: modèle sur un dataset de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','aaaaaaaa-2222-0000-0000-000000000001','m C','x','classification')$q$);
+select tests.expect_fail('ATTAQUE editor: modèle de A sur un dataset d''un autre espace', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','m','x','classification')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: visualisation de A sur un dataset d''un autre espace', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.visualizations (project_id, dataset_id, name, chart_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','v','bar')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: ajouter dans le projet de B (sans être son membre)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.pipelines (project_id, name) values ('bbbbbbbb-1111-0000-0000-000000000001','intrus')$q$, 'row-level security');
+select tests.expect_val('editor: ne voit pas le projet de B', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.projects where id = 'bbbbbbbb-1111-0000-0000-000000000001'$q$, '0');
+select tests.expect_fail('ATTAQUE editor: déplacer un pipeline de A vers son propre projet', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.pipelines set project_id = 'cccccccc-1111-0000-0000-000000000001' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: s''approprier un pipeline de A (user_id)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.pipelines set user_id = 'cccccccc-0000-0000-0000-00000000000c' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$q$, 'owner_immutable');
+select tests.expect_fail('ATTAQUE editor: créer un projet chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.projects (name, user_id) values ('intrus','aaaaaaaa-0000-0000-0000-00000000000a')$q$, 'row-level security');
+select tests.expect_rows('ATTAQUE editor: renommer le projet de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.projects set name = 'piraté' where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, 0);
+select tests.expect_rows('ATTAQUE editor: supprimer le projet de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, 0);
+
+-- ----- Fichiers -----
+select tests.expect_val('viewer: lit les fichiers de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/team/partage.csv'$q$, '1');
+select tests.expect_val('étranger: ne lit pas les fichiers de A', 'authenticated', :E::uuid, 'e@test.dev',
+  $q$select count(*) from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/team/partage.csv'$q$, '0');
+select tests.expect_fail('ATTAQUE viewer: écrire un fichier chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('datasets','aaaaaaaa-0000-0000-0000-00000000000a/team/intrus.csv')$q$, 'row-level security');
+select tests.expect_ok('editor: écrit un fichier chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('datasets','aaaaaaaa-0000-0000-0000-00000000000a/team/par-c.csv')$q$);
+select tests.expect_ok('editor: écrit un rapport chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('reports','aaaaaaaa-0000-0000-0000-00000000000a/team/rapport.pdf')$q$);
+select tests.expect_fail('ATTAQUE editor: écrire dans les avatars de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('avatars','aaaaaaaa-0000-0000-0000-00000000000a/avatar.png')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: écrire chez B (non membre)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('datasets','bbbbbbbb-0000-0000-0000-00000000000b/x.csv')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: dossier qui n''est pas un UUID', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('datasets','pas-un-uuid/x.csv')$q$, 'row-level security');
+select tests.expect_rows('editor: supprime un fichier chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/team/par-c.csv'$q$, 1);
+select tests.expect_rows('ATTAQUE viewer: supprime un fichier chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$delete from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/team/partage.csv'$q$, 0);
+
+-- ----- Changement de rôle par le propriétaire -----
+select tests.expect_rows('légitime: A passe B en editor', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set role = 'editor' where lower(member_email) = 'b@test.dev'$q$, 1);
+select tests.expect_ok('B (devenu editor) ajoute un dataset chez A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','ds par B')$q$);
+select tests.expect_rows('légitime: A repasse B en viewer', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set role = 'viewer' where lower(member_email) = 'b@test.dev'$q$, 1);
+select tests.expect_fail('B (redevenu viewer) ne peut plus ajouter', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','ds par B 2')$q$, 'row-level security');
+
+-- ----- Limite : 10 invitations en Premium, illimité en Entreprise -----
+select tests.expect_rows('A invite 7 personnes de plus (10 au total)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email) select 'u' || g || '@test.dev' from generate_series(1, 7) g$q$, 7);
+select tests.expect_fail('LIMITE: 11e invitation refusée (Premium)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email) values ('de-trop@test.dev')$q$, 'team_limit');
+update public.subscriptions set plan = 'enterprise' where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a';
+select tests.expect_ok('Entreprise: 11e invitation acceptée', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email) values ('de-trop@test.dev')$q$);
+update public.subscriptions set plan = 'premium' where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a';
+select tests.expect_rows('A retire les 8 invitations supplémentaires', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$delete from public.team_members where member_email like 'u%@test.dev' or member_email = 'de-trop@test.dev'$q$, 8);
+
+-- ----- Plan du propriétaire expiré : accès coupé, puis rétabli -----
+update public.subscriptions set current_period_end = now() - interval '1 day'
+ where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a';
+select tests.expect_val('plan expiré: B ne voit plus le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '0');
+select tests.expect_val('plan expiré: my_workspaces() vide', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.my_workspaces()$q$, '0');
+select tests.expect_fail('plan expiré: C n''ajoute plus rien chez A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.datasets (project_id, name) values ('aaaaaaaa-1111-0000-0000-000000000001','trop tard')$q$, 'row-level security');
+select tests.expect_val('plan expiré: B ne lit plus les fichiers de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/team/partage.csv'$q$, '0');
+select tests.expect_val('plan expiré: les données de A restent intactes', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select count(*) from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, '1');
+update public.subscriptions set current_period_end = now() + interval '20 days'
+ where user_id = 'aaaaaaaa-0000-0000-0000-00000000000a';
+select tests.expect_val('renouvellement: B revoit le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '1');
+
+-- ----- Retrait, départ, refus -----
+select tests.expect_rows('légitime: A retire B', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$delete from public.team_members where lower(member_email) = 'b@test.dev'$q$, 1);
+select tests.expect_val('B retiré: plus d''accès immédiatement', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '0');
+select tests.expect_rows('légitime: C quitte l''équipe', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from public.team_members where member_id = 'cccccccc-0000-0000-0000-00000000000c'$q$, 1);
+select tests.expect_val('C parti: plus d''accès', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$select count(*) from public.datasets where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, '0');
+select tests.expect_ok('A réinvite B', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.team_members (member_email, role) values ('b@test.dev','viewer')$q$);
+select tests.expect_ok('B refuse l''invitation', 'authenticated', :B::uuid, 'b@test.dev',
+  format($q$select public.decline_team_invitation(%L)$q$, (select id from public.team_members where lower(member_email) = 'b@test.dev')));
+select tests.expect_val('invitation refusée: ligne supprimée', 'postgres', null, null,
+  $q$select count(*) from public.team_members where lower(member_email) = 'b@test.dev'$q$, '0');
+
+-- ----- Suppression de compte : l'équipe suit -----
+delete from auth.users where id = 'cccccccc-0000-0000-0000-00000000000c';
+select tests.expect_val('compte d''un membre supprimé: aucune ligne orpheline', 'postgres', null, null,
+  $q$select count(*) from public.team_members where member_id = 'cccccccc-0000-0000-0000-00000000000c'$q$, '0');
+select tests.expect_val('compte supprimé: ses créations chez A restent (created_by vidé)', 'postgres', null, null,
+  $q$select (count(*) = 1 and bool_and(created_by is null))::text from public.datasets where name = 'ds par C'$q$, 'true');
 
 -- ===== Bilan =====
 select n, case when ok then 'PASS' else 'FAIL' end as resultat, label, case when ok then '' else detail end as detail
