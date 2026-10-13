@@ -21,7 +21,7 @@ const tooltipStyle = { borderRadius: '12px', border: '1px solid #e2e8f0', fontSi
 interface ActivityRow { id: string; action: string; created_at: string; metadata: { name?: string } | null }
 
 export function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { t, lang } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -32,16 +32,18 @@ export function DashboardPage() {
   const [failed, setFailed] = useState(false);
 
   async function loadData() {
+    if (!user) return;
+    const uid = user.id; // MES données uniquement (la RLS laisse aussi lire l'espace d'un propriétaire qui m'a invité)
     setLoading(true);
     setFailed(false);
     try {
       const since = new Date(Date.now() - 7 * 86400000).toISOString();
       const [proj, projCount, ds, dsCount, viz, act, week] = await Promise.all([
-        supabase.from('projects').select('*').order('updated_at', { ascending: false }).limit(5),
-        supabase.from('projects').select('id', { count: 'exact', head: true }),
-        supabase.from('datasets').select('*').eq('status', 'profiled').order('row_count', { ascending: false }).limit(8),
-        supabase.from('datasets').select('row_count').eq('status', 'profiled').limit(1000),
-        supabase.from('visualizations').select('id', { count: 'exact', head: true }),
+        supabase.from('projects').select('*').eq('user_id', uid).order('updated_at', { ascending: false }).limit(5),
+        supabase.from('projects').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+        supabase.from('datasets').select('*').eq('user_id', uid).eq('status', 'profiled').order('row_count', { ascending: false }).limit(8),
+        supabase.from('datasets').select('row_count').eq('user_id', uid).eq('status', 'profiled').limit(1000),
+        supabase.from('visualizations').select('id', { count: 'exact', head: true }).eq('user_id', uid),
         supabase.from('activity_log').select('id, action, created_at, metadata').order('created_at', { ascending: false }).limit(10),
         supabase.from('activity_log').select('created_at').gte('created_at', since).limit(1000),
       ]);
@@ -67,7 +69,8 @@ export function DashboardPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const kpis = [
     { label: t('dashboard.kpi.projects'), value: counts.projects, icon: FolderKanban, color: 'savanna' },

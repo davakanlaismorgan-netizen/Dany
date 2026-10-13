@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase';
 
-// Tables contenant des données de l'utilisateur. La sécurité au niveau des lignes (RLS) garantit
-// que chaque requête ne renvoie que ses propres lignes.
+// Tables contenant des données de l'utilisateur. Depuis l'équipe, la RLS laisse aussi lire les projets
+// d'un propriétaire qui nous a invité : l'export ne doit contenir QUE les lignes dont on est propriétaire
+// (filtre explicite sur user_id), jamais celles d'un autre compte.
 export const EXPORT_TABLES = [
   'profiles', 'subscriptions', 'payments', 'projects', 'datasets', 'pipelines', 'models',
   'visualizations', 'reports', 'ai_conversations', 'notification_preferences', 'team_members',
@@ -9,6 +10,9 @@ export const EXPORT_TABLES = [
 ] as const;
 
 const PAGE_SIZE = 1000; // limite par requête de l'API
+
+// Tables partageables avec l'équipe : on n'exporte que les lignes dont user_id = soi.
+const OWNED_TABLES = new Set(['projects', 'datasets', 'pipelines', 'models', 'visualizations', 'reports']);
 
 export interface DataExport {
   exported_at: string;
@@ -18,10 +22,13 @@ export interface DataExport {
   errors: string[];
 }
 
-async function readAll(table: string): Promise<{ rows: unknown[]; error: string | null }> {
+async function readAll(table: string, userId: string): Promise<{ rows: unknown[]; error: string | null }> {
   const rows: unknown[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase.from(table).select('*').order('id').range(from, from + PAGE_SIZE - 1);
+    const base = supabase.from(table).select('*');
+    const { data, error } = await (OWNED_TABLES.has(table) ? base.eq('user_id', userId) : base)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1);
     if (error) return { rows, error: error.message };
     rows.push(...(data ?? []));
     if (!data || data.length < PAGE_SIZE) return { rows, error: null };
@@ -29,7 +36,7 @@ async function readAll(table: string): Promise<{ rows: unknown[]; error: string 
 }
 
 export async function collectUserData(userId: string): Promise<DataExport> {
-  const results = await Promise.all(EXPORT_TABLES.map(async (table) => ({ table, ...(await readAll(table)) })));
+  const results = await Promise.all(EXPORT_TABLES.map(async (table) => ({ table, ...(await readAll(table, userId)) })));
   return {
     exported_at: new Date().toISOString(),
     user_id: userId,

@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/Loading';
 import { cn } from '@/lib/utils';
 import { buildChartData, isCompatible, type ChartConfig, type ChartType, type Profiling } from '@/lib/chartData';
 import { useI18n } from '@/context/I18nContext';
+import { useWorkspace } from '@/lib/workspace';
 import type { Dataset, Visualization } from '@/types';
 
 const chartTypes: { type: ChartType; labelKey: string; icon: typeof BarChart3 }[] = [
@@ -33,6 +34,7 @@ interface SavedViz { id: string; name: string; type: string; config: ChartConfig
 
 export function VisualizationsTab({ projectId }: { projectId: string }) {
   const { t } = useI18n();
+  const { canWrite } = useWorkspace();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [saved, setSaved] = useState<SavedViz[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -150,9 +152,11 @@ export function VisualizationsTab({ projectId }: { projectId: string }) {
               {compatible && data.length > 0 ? (
                 <>
                   <div className="h-[350px]"><ChartRenderer type={type} data={data} xLabel={x} yLabel={y} /></div>
-                  <button type="button" onClick={handleSave} disabled={saving} className="btn-secondary text-sm py-2">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {t('viz.save')}
-                  </button>
+                  {canWrite && (
+                    <button type="button" onClick={handleSave} disabled={saving} className="btn-secondary text-sm py-2">
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {t('viz.save')}
+                    </button>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-neutral-500 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {t('viz.incompatible')}</p>
@@ -179,9 +183,11 @@ export function VisualizationsTab({ projectId }: { projectId: string }) {
                           <div className="w-9 h-9 rounded-lg bg-savanna-50 flex items-center justify-center shrink-0"><Icon className="w-4 h-4 text-savanna-600" /></div>
                           <h4 className="font-semibold text-neutral-900 text-sm truncate">{v.name}</h4>
                         </div>
-                        <button type="button" aria-label={t('common.delete')} onClick={() => handleDelete(v.id)} disabled={deletingId === v.id} className="btn-ghost p-2 text-xs text-clay-600 disabled:opacity-50">
-                          {deletingId === v.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </button>
+                        {canWrite && (
+                          <button type="button" aria-label={t('common.delete')} onClick={() => handleDelete(v.id)} disabled={deletingId === v.id} className="btn-ghost p-2 text-xs text-clay-600 disabled:opacity-50">
+                            {deletingId === v.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        )}
                       </div>
                       <div className="h-[200px]">
                         {ct && pts.length > 0

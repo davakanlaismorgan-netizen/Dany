@@ -98,6 +98,10 @@ psql -d <base_vide> -v ON_ERROR_STOP=1 -f supabase/tests/security.test.sql
 `local-stubs.sql` simule Supabase sur un PostgreSQL ordinaire : ne l'exécutez jamais sur un vrai projet.
 La CI exécute ces deux suites à chaque pull request.
 
+## Équipe
+
+Collaboration Premium / Entreprise : voir `docs/EQUIPE.md` (droits, mise en service, recette, retour arrière).
+
 ## 8. Limites connues
 
 - L'assistant IA, l'AutoML, les pipelines et la génération de rapports sont des **simulations** dans l'interface :
