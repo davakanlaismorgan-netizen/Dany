@@ -10,6 +10,7 @@ function setup(over: Partial<ProcessDeps> = {}, ds: Partial<{ user_id: string; s
   const deps: ProcessDeps = {
     env: () => undefined,
     getUserId: () => Promise.resolve(UID),
+    canWriteWorkspace: () => Promise.resolve(false),
     getDataset: () => Promise.resolve({
       id: DS, user_id: ds.user_id ?? UID, source_type: ds.source_type ?? "csv",
       source_config: { storage_path: "path" in ds ? ds.path : `${UID}/p/1_f.csv` },
@@ -97,4 +98,40 @@ Deno.test("autre erreur base : 500 sans détail interne, dataset conservé", asy
   assert.equal(res.status, 500);
   assert.ok(!JSON.stringify(await res.json()).includes("10.0.0.1"));
   assert.deepEqual(log, []);
+});
+
+const OWNER = "bbbbbbbb-0000-0000-0000-00000000000b";
+
+Deno.test("équipe : un éditeur actif traite le dataset du propriétaire (fichier dans le dossier du propriétaire)", async () => {
+  const asked: string[] = [];
+  const { deps, log } = setup(
+    { canWriteWorkspace: (_h, owner) => { asked.push(owner); return Promise.resolve(true); } },
+    { user_id: OWNER, path: `${OWNER}/p/1_f.csv` },
+  );
+  const res = await handleProcess(post({ dataset_id: DS }), deps);
+  assert.equal(res.status, 200);
+  assert.deepEqual(log, ["save:3"]);
+  assert.deepEqual(asked, [OWNER]);
+});
+
+Deno.test("ATTAQUE équipe: un viewer ou un étranger (droit d'écriture refusé) → 404, rien d'écrit", async () => {
+  const { deps, log } = setup({ canWriteWorkspace: () => Promise.resolve(false) }, { user_id: OWNER, path: `${OWNER}/p/1_f.csv` });
+  assert.equal((await handleProcess(post({ dataset_id: DS }), deps)).status, 404);
+  assert.deepEqual(log, []);
+});
+
+Deno.test("ATTAQUE équipe: un éditeur ne peut pas pointer vers un fichier hors du dossier du propriétaire", async () => {
+  for (const path of [`${UID}/p/mien.csv`, `${OWNER}/../${UID}/p/f.csv`]) {
+    const { deps, log } = setup({ canWriteWorkspace: () => Promise.resolve(true) }, { user_id: OWNER, path });
+    const res = await handleProcess(post({ dataset_id: DS }), deps);
+    assert.equal(res.status, 400, path);
+    assert.deepEqual(log, ["failed:invalid_path"]);
+  }
+});
+
+Deno.test("le propriétaire n'appelle pas la vérification d'équipe", async () => {
+  let called = false;
+  const { deps } = setup({ canWriteWorkspace: () => { called = true; return Promise.resolve(false); } });
+  assert.equal((await handleProcess(post({ dataset_id: DS }), deps)).status, 200);
+  assert.equal(called, false);
 });
