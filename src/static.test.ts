@@ -30,11 +30,17 @@ describe('garde-fous statiques du code livré', () => {
   it('les pages de démonstration affichent le bandeau Démo', () => {
     const need: Record<string, string> = {
       'src/pages/AssistantPage.tsx': 'assistant', 'src/pages/workspace/tabs/ModelsTab.tsx': 'models',
-      'src/pages/workspace/tabs/PipelineTab.tsx': 'pipelines', 'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
+      'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
     };
     for (const [f, feat] of Object.entries(need)) {
       expect(readFileSync(f, 'utf8')).toContain(`<DemoBanner feature="${feat}" />`);
     }
+  });
+  it('les pipelines sont réels : plus de bandeau Démo, exécution déléguée au serveur', () => {
+    const tab = readFileSync('src/pages/workspace/tabs/PipelineTab.tsx', 'utf8');
+    expect(tab).not.toContain('DemoBanner');
+    expect(tab).not.toMatch(/setTimeout\([^)]*setRunning/);
+    expect(tab).toContain('runPipeline(');
   });
   it('seules les variables VITE_ publiques sont lues, aucun secret', () => {
     const vars = src.flatMap(([, c]) => [...c.matchAll(/import\.meta\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]));
