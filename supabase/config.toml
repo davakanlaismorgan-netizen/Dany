@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.run-pipeline]
 verify_jwt = true
+
+[functions.run-automl]
+verify_jwt = true

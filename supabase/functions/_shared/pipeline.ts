@@ -100,7 +100,7 @@ export function tableToCsv(t: Table): Uint8Array {
 // ---------- utilitaires ----------
 
 const isEmpty = (v: string) => v.trim() === "";
-const asNumber = (v: string): number | null => {
+export const asNumber = (v: string): number | null => {
   const t = v.trim();
   if (!NUMERIC.test(t)) return null;
   const n = Number(t.replace(",", "."));
