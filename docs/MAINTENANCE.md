@@ -15,6 +15,6 @@ Mises à jour compatibles appliquées (`npm update`). **Montées de version maje
 
 ## Code
 - `SettingsPage.tsx` (~560 lignes) reste à découper en un composant par onglet.
-- Les fonctionnalités de démonstration (assistant, AutoML, rapports) écrivent encore des lignes simulées en base ; elles sont signalées « Démonstration » mais restent à implémenter ou retirer (décision produit).
+- Les fonctionnalités de démonstration (assistant, rapports) écrivent encore des lignes simulées en base ; elles sont signalées « Démonstration » mais restent à implémenter ou retirer (décision produit).
 - Excel (.xlsx) non pris en charge à l'import (CSV/JSON uniquement).
 - Le traitement serveur des fichiers n'a pas été éprouvé sur de gros fichiers avec les limites réelles d'une edge function Supabase.

@@ -29,8 +29,7 @@ describe('garde-fous statiques du code livré', () => {
   });
   it('les pages de démonstration affichent le bandeau Démo', () => {
     const need: Record<string, string> = {
-      'src/pages/AssistantPage.tsx': 'assistant', 'src/pages/workspace/tabs/ModelsTab.tsx': 'models',
-      'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
+      'src/pages/AssistantPage.tsx': 'assistant', 'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
     };
     for (const [f, feat] of Object.entries(need)) {
       expect(readFileSync(f, 'utf8')).toContain(`<DemoBanner feature="${feat}" />`);
@@ -41,6 +40,12 @@ describe('garde-fous statiques du code livré', () => {
     expect(tab).not.toContain('DemoBanner');
     expect(tab).not.toMatch(/setTimeout\([^)]*setRunning/);
     expect(tab).toContain('runPipeline(');
+  });
+  it("l'AutoML est réel : plus de bandeau Démo ni de métriques tirées au hasard", () => {
+    const tab = readFileSync('src/pages/workspace/tabs/ModelsTab.tsx', 'utf8');
+    expect(tab).not.toContain('DemoBanner');
+    expect(tab).not.toMatch(/Math\.random|mockMetrics/);
+    expect(tab).toContain('runAutoMl(');
   });
   it('seules les variables VITE_ publiques sont lues, aucun secret', () => {
     const vars = src.flatMap(([, c]) => [...c.matchAll(/import\.meta\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]));

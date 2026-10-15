@@ -148,9 +148,29 @@ select tests.expect_ok('légitime: A crée un dataset dans son projet', 'authent
 select tests.expect_fail('ATTAQUE: A déplace son dataset vers le projet de B', 'authenticated', :A::uuid, 'a@test.dev',
   $q$update public.datasets set project_id = 'bbbbbbbb-1111-0000-0000-000000000001' where id = 'aaaaaaaa-2222-0000-0000-000000000001'$q$, 'permission denied');
 select tests.expect_fail('ATTAQUE: A référence le dataset de B dans un modèle', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','m','x','classification')$q$, 'row-level security');
-select tests.expect_ok('légitime: A crée un modèle sans dataset', 'authenticated', :A::uuid, 'a@test.dev',
-  $q$insert into public.models (project_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','m','x','classification')$q$);
+  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','m','x','classification')$q$, 'permission denied');
+-- Les modèles sont écrits par le serveur (run-automl) : le client ne peut ni en créer ni fixer des métriques.
+select tests.expect_fail('ATTAQUE: A écrit lui-même un modèle avec de fausses métriques', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.models (project_id, name, model_type, task_type, status, metrics) values ('aaaaaaaa-1111-0000-0000-000000000001','faux','automl','classification','completed','{"accuracy":0.99}')$q$, 'permission denied');
+insert into public.models (id, project_id, dataset_id, name, model_type, task_type, algorithm, status, metrics, user_id) values
+  ('aaaaaaaa-4444-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'aaaaaaaa-2222-0000-0000-000000000001',
+   'Modèle A', 'automl', 'classification', 'forest', 'completed', '{"accuracy":0.8}', 'aaaaaaaa-0000-0000-0000-00000000000a');
+select tests.expect_fail('ATTAQUE: A modifie les métriques de son modèle', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.models set metrics = '{"accuracy":0.99}' where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A modifie le statut / l''importance de son modèle', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.models set feature_importance = '{"x":1}', status = 'completed' where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_rows('légitime: A renomme son modèle', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.models set name = 'Modèle A renommé' where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, 1);
+select tests.expect_rows('ATTAQUE: B renomme le modèle de A (0 ligne)', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$update public.models set name = 'piraté' where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, 0);
+select tests.expect_val('métriques du modèle de A intactes', 'postgres', null, null,
+  $q$select metrics->>'accuracy' from public.models where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, '0.8');
+select tests.expect_ok('légitime: le serveur (service_role) enregistre un modèle calculé', 'service_role', null, null,
+  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type, algorithm, status, metrics, user_id, created_by) values ('aaaaaaaa-1111-0000-0000-000000000001','aaaaaaaa-2222-0000-0000-000000000001','calculé','automl','classification','forest','completed','{"accuracy":0.9}','aaaaaaaa-0000-0000-0000-00000000000a','aaaaaaaa-0000-0000-0000-00000000000a')$q$);
+select tests.expect_val('service_role : lit le plan effectif du propriétaire', 'service_role', null, null,
+  $q$select public.effective_plan('aaaaaaaa-0000-0000-0000-00000000000a')$q$, 'free');
+select tests.expect_fail('ATTAQUE: un utilisateur lit le plan effectif d''un autre', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select public.effective_plan('bbbbbbbb-0000-0000-0000-00000000000b')$q$, 'permission denied');
 select tests.expect_fail('ATTAQUE: usurper user_id à l''insertion', 'authenticated', :A::uuid, 'a@test.dev',
   $q$insert into public.projects (name, user_id) values ('vol','bbbbbbbb-0000-0000-0000-00000000000b')$q$, 'row-level security');
 
@@ -467,10 +487,10 @@ select tests.expect_rows('editor: modifie un pipeline de A', 'authenticated', :C
   $q$update public.pipelines set name = 'modifié par C' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$q$, 1);
 select tests.expect_rows('editor: supprime un pipeline de A', 'authenticated', :C::uuid, 'c@test.dev',
   $q$delete from public.pipelines where name = 'pipe C'$q$, 1);
-select tests.expect_ok('editor: modèle sur un dataset de A', 'authenticated', :C::uuid, 'c@test.dev',
-  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','aaaaaaaa-2222-0000-0000-000000000001','m C','x','classification')$q$);
-select tests.expect_fail('ATTAQUE editor: modèle de A sur un dataset d''un autre espace', 'authenticated', :C::uuid, 'c@test.dev',
-  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','m','x','classification')$q$, 'row-level security');
+select tests.expect_fail('ATTAQUE editor: écrire directement un modèle (réservé au serveur)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.models (project_id, dataset_id, name, model_type, task_type) values ('aaaaaaaa-1111-0000-0000-000000000001','aaaaaaaa-2222-0000-0000-000000000001','m C','x','classification')$q$, 'permission denied');
+select tests.expect_rows('editor: renomme un modèle de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.models set name = 'renommé par C' where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, 1);
 select tests.expect_fail('ATTAQUE editor: visualisation de A sur un dataset d''un autre espace', 'authenticated', :C::uuid, 'c@test.dev',
   $q$insert into public.visualizations (project_id, dataset_id, name, chart_type) values ('aaaaaaaa-1111-0000-0000-000000000001','bbbbbbbb-2222-0000-0000-000000000001','v','bar')$q$, 'row-level security');
 select tests.expect_fail('ATTAQUE editor: ajouter dans le projet de B (sans être son membre)', 'authenticated', :C::uuid, 'c@test.dev',
