@@ -514,7 +514,7 @@ export function runAutoMl(
     algorithm: useBaseline ? "baseline" : best.label,
     metrics: useBaseline ? baseline : best.metrics,
     baseline,
-    leaderboard: board.map(({ cand: _c, ...e }) => e),
+    leaderboard: board.map((e): LeaderboardEntry => ({ label: e.label, algorithm: e.algorithm, params: e.params, metrics: e.metrics, score: e.score })),
     skipped,
     feature_importance: importance,
     n_rows: prep.rowsTotal,
