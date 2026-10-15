@@ -104,8 +104,8 @@ Collaboration Premium / Entreprise : voir `docs/EQUIPE.md` (droits, mise en serv
 
 ## 8. Limites connues
 
-- L'assistant IA, l'AutoML, les pipelines et la génération de rapports sont des **simulations** dans l'interface :
-  ils ne traitent pas encore les données réelles.
+- L'assistant IA, l'AutoML et la génération de rapports sont des **simulations** dans l'interface :
+  ils ne traitent pas encore les données réelles. Les **pipelines** sont réels (voir `docs/PIPELINES.md`).
 - Les moyens de paiement et les compteurs d'usage affichés dans Paramètres > Facturation sont des valeurs d'exemple.
 - La limite de 10 000 lignes du plan gratuit s'appuie sur le nombre de lignes déclaré par le navigateur.
 - Pas de politique CSP : à ajouter après un test avec le widget KKiaPay.

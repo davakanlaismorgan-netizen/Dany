@@ -44,6 +44,17 @@ export function decodeText(bytes: Uint8Array): { text: string; encoding: "utf-8"
   return { text: text.replace(/^\uFEFF/, ""), encoding };
 }
 
+// Noms vides ou répétés : rendus uniques pour que le profil (et les pipelines) restent exploitables.
+export function uniqueHeaders(h: unknown[]): string[] {
+  const seen = new Map<string, number>();
+  return h.map((raw, i) => {
+    const base = String(raw ?? "").trim() || `col_${i + 1}`;
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return n === 1 ? base : `${base}_${n}`;
+  });
+}
+
 class Collector {
   headers: string[] = [];
   rowCount = 0;
@@ -55,14 +66,7 @@ class Collector {
 
   setHeaders(h: string[]) {
     if (h.length > MAX_COLUMNS) throw new DatasetError("too_many_columns");
-    // Noms vides ou répétés : rendus uniques pour que le profil reste exploitable.
-    const seen = new Map<string, number>();
-    this.headers = h.map((raw, i) => {
-      const base = String(raw ?? "").trim() || `col_${i + 1}`;
-      const n = (seen.get(base) ?? 0) + 1;
-      seen.set(base, n);
-      return n === 1 ? base : `${base}_${n}`;
-    });
+    this.headers = uniqueHeaders(h);
     this.missing = this.headers.map(() => 0);
     this.numeric = this.headers.map(() => 0);
     this.distinct = this.headers.map(() => new Set<string>());
