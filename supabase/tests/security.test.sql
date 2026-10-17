@@ -167,6 +167,24 @@ select tests.expect_val('métriques du modèle de A intactes', 'postgres', null,
   $q$select metrics->>'accuracy' from public.models where id = 'aaaaaaaa-4444-0000-0000-000000000001'$q$, '0.8');
 select tests.expect_ok('légitime: le serveur (service_role) enregistre un modèle calculé', 'service_role', null, null,
   $q$insert into public.models (project_id, dataset_id, name, model_type, task_type, algorithm, status, metrics, user_id, created_by) values ('aaaaaaaa-1111-0000-0000-000000000001','aaaaaaaa-2222-0000-0000-000000000001','calculé','automl','classification','forest','completed','{"accuracy":0.9}','aaaaaaaa-0000-0000-0000-00000000000a','aaaaaaaa-0000-0000-0000-00000000000a')$q$);
+-- Les rapports sont produits par le serveur (generate-report) : le client ne peut ni en créer ni en maquiller.
+select tests.expect_fail('ATTAQUE: A fabrique lui-même un rapport « prêt »', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into public.reports (project_id, name, format, status, file_url) values ('aaaaaaaa-1111-0000-0000-000000000001','faux','pdf','completed','bbbbbbbb-0000-0000-0000-00000000000b/secret.pdf')$q$, 'permission denied');
+insert into public.reports (id, project_id, name, format, status, file_url, user_id) values
+  ('aaaaaaaa-5555-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'Rapport A', 'pdf', 'completed',
+   'aaaaaaaa-0000-0000-0000-00000000000a/r1.pdf', 'aaaaaaaa-0000-0000-0000-00000000000a');
+select tests.expect_fail('ATTAQUE: A pointe son rapport vers un fichier d''un autre', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.reports set file_url = 'bbbbbbbb-0000-0000-0000-00000000000b/secret.pdf' where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A modifie la configuration / le statut de son rapport', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.reports set config = '{"branding":"custom"}', status = 'completed' where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, 'permission denied');
+select tests.expect_rows('légitime: A renomme son rapport', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.reports set name = 'Rapport A renommé' where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, 1);
+select tests.expect_rows('ATTAQUE: B renomme le rapport de A (0 ligne)', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$update public.reports set name = 'piraté' where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, 0);
+select tests.expect_val('B ne voit pas le rapport de A', 'authenticated', :B::uuid, 'b@test.dev',
+  $q$select count(*) from public.reports where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, '0');
+select tests.expect_ok('légitime: le serveur (service_role) enregistre un rapport généré', 'service_role', null, null,
+  $q$insert into public.reports (project_id, name, format, status, file_url, user_id, created_by, config) values ('aaaaaaaa-1111-0000-0000-000000000001','Rapport serveur','pdf','completed','aaaaaaaa-0000-0000-0000-00000000000a/r2.pdf','aaaaaaaa-0000-0000-0000-00000000000a','aaaaaaaa-0000-0000-0000-00000000000a','{"branding":"das"}')$q$);
 select tests.expect_val('service_role : lit le plan effectif du propriétaire', 'service_role', null, null,
   $q$select public.effective_plan('aaaaaaaa-0000-0000-0000-00000000000a')$q$, 'free');
 select tests.expect_fail('ATTAQUE: un utilisateur lit le plan effectif d''un autre', 'authenticated', :A::uuid, 'a@test.dev',
@@ -517,6 +535,19 @@ select tests.expect_fail('ATTAQUE viewer: écrire un fichier chez A', 'authentic
   $q$insert into storage.objects (bucket_id, name) values ('datasets','aaaaaaaa-0000-0000-0000-00000000000a/team/intrus.csv')$q$, 'row-level security');
 select tests.expect_ok('editor: écrit un fichier chez A', 'authenticated', :C::uuid, 'c@test.dev',
   $q$insert into storage.objects (bucket_id, name) values ('datasets','aaaaaaaa-0000-0000-0000-00000000000a/team/par-c.csv')$q$);
+select tests.expect_fail('ATTAQUE editor: écrire directement un rapport (réservé au serveur)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into public.reports (project_id, name, format, status) values ('aaaaaaaa-1111-0000-0000-000000000001','faux C','pdf','completed')$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE editor: modifier le statut d''un rapport de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$update public.reports set status = 'completed', file_url = 'x' where id = 'aaaaaaaa-5555-0000-0000-000000000001'$q$, 'permission denied');
+-- Marque blanche : le logo du propriétaire ne peut être changé que par lui.
+select tests.expect_fail('ATTAQUE editor: remplacer le logo de marque de A', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('reports','aaaaaaaa-0000-0000-0000-00000000000a/brand/logo.jpg')$q$, 'row-level security');
+select tests.expect_ok('légitime: A dépose son logo de marque', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$insert into storage.objects (bucket_id, name) values ('reports','aaaaaaaa-0000-0000-0000-00000000000a/brand/logo.jpg')$q$);
+select tests.expect_rows('ATTAQUE editor: supprimer le logo de marque de A (0 ligne)', 'authenticated', :C::uuid, 'c@test.dev',
+  $q$delete from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/brand/logo.jpg'$q$, 0);
+select tests.expect_val('le logo de A est toujours là', 'postgres', null, null,
+  $q$select count(*) from storage.objects where name = 'aaaaaaaa-0000-0000-0000-00000000000a/brand/logo.jpg'$q$, '1');
 select tests.expect_ok('editor: écrit un rapport chez A', 'authenticated', :C::uuid, 'c@test.dev',
   $q$insert into storage.objects (bucket_id, name) values ('reports','aaaaaaaa-0000-0000-0000-00000000000a/team/rapport.pdf')$q$);
 select tests.expect_fail('ATTAQUE editor: écrire dans les avatars de A', 'authenticated', :C::uuid, 'c@test.dev',

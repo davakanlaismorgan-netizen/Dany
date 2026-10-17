@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.run-automl]
 verify_jwt = true
+
+[functions.generate-report]
+verify_jwt = true

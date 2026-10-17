@@ -1,136 +1,192 @@
-import { DemoBanner } from '@/components/DemoBanner';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  FileText, FileSpreadsheet, Presentation, Download, CheckCircle2,
-  Clock, Mail, MessageCircle, Send, Plus, Trash2, Eye, Loader2,
+  FileText, FileSpreadsheet, Download, Plus, Trash2, Eye, Loader2, AlertTriangle, ImagePlus, Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/report';
+import { generateReport, reportErrorCode, type ReportTemplate } from '@/lib/generateReport';
+import { logoPath, toJpegLogo } from '@/lib/brandLogo';
 import type { Report } from '@/types';
 import { EmptyState, CardSkeleton } from '@/components/ui/Loading';
 import { timeAgo, cn } from '@/lib/utils';
 import { useI18n } from '@/context/I18nContext';
+import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/lib/workspace';
 
-const reportTemplates = [
-  { id: 'exec', nameKey: 'Executive Summary', nameFr: 'Synthèse Exécutive', descEn: 'High-level overview with key metrics and recommendations', descFr: 'Vue d\'ensemble avec métriques clés et recommandations', icon: FileText, format: 'pdf' },
-  { id: 'detailed', nameKey: 'Detailed Analysis', nameFr: 'Analyse Détaillée', descEn: 'Comprehensive report with charts, models, and data tables', descFr: 'Rapport complet avec graphiques, modèles et tableaux', icon: FileSpreadsheet, format: 'pdf' },
-  { id: 'presentation', nameKey: 'Presentation Deck', nameFr: 'Présentation', descEn: 'Slide deck for stakeholder presentations', descFr: 'Diapositives pour présentations aux parties prenantes', icon: Presentation, format: 'ppt' },
+const templates: { id: ReportTemplate; icon: typeof FileText; format: 'pdf' | 'csv' }[] = [
+  { id: 'exec', icon: FileText, format: 'pdf' },
+  { id: 'detailed', icon: FileText, format: 'pdf' },
+  { id: 'data', icon: FileSpreadsheet, format: 'csv' },
 ];
 
-const formatIcons: Record<string, typeof FileText> = {
-  pdf: FileText,
-  ppt: Presentation,
-  docx: FileSpreadsheet,
-};
-
-const formatColors: Record<string, string> = {
-  pdf: 'clay',
-  ppt: 'savanna',
-  docx: 'ocean',
-};
-
-const formatLabels: Record<string, string> = {
-  pdf: 'PDF',
-  ppt: 'PPT',
-  docx: 'DOCX',
-};
+const SIGNED_URL_SECONDS = 300;
 
 export function ReportsTab({ projectId }: { projectId: string }) {
   const { t, lang } = useI18n();
-  const { canWrite } = useWorkspace();
+  const { canWrite, isOwner } = useWorkspace();
+  const { user, profile } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGenerator, setShowGenerator] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    async function loadReports() {
-      const { data, error } = await supabase
-        .from('reports')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-      if (error) {
-        setReports([]);
-      } else {
-        setReports((data as Report[]) ?? []);
-      }
-      setLoading(false);
-    }
-    loadReports();
+  const premium = profile?.plan === 'premium' || profile?.plan === 'enterprise';
+  const company = (profile?.company ?? '').trim();
+  const showBrandPanel = isOwner && !!user;
+
+  const loadReports = useCallback(async () => {
+    const { data, error: err } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+    if (err) reportError(err, { where: 'ReportsTab.load' });
+    setReports(err ? [] : ((data as Report[]) ?? []));
+    setLoading(false);
   }, [projectId]);
+
+  useEffect(() => { loadReports(); }, [loadReports]);
+
+  const refreshLogo = useCallback(async () => {
+    if (!user || !isOwner || !premium) { setLogoUrl(null); return; }
+    const { data } = await supabase.storage.from('reports').createSignedUrl(logoPath(user.id), SIGNED_URL_SECONDS);
+    setLogoUrl(data?.signedUrl ?? null);
+  }, [user, isOwner, premium]);
+
+  useEffect(() => { refreshLogo(); }, [refreshLogo]);
 
   const handleGenerate = useCallback(async () => {
     if (!selectedTemplate) return;
-    const tpl = reportTemplates.find(rt => rt.id === selectedTemplate);
-    if (!tpl) return;
     setGenerating(true);
+    setError(null);
+    setNotice(null);
     try {
-      const name = `${lang === 'fr' ? tpl.nameFr : tpl.nameKey} — ${new Date().toLocaleDateString()}`;
-      // Démonstration : rien n'est enregistré en base et aucun fichier n'est produit.
-      const draft: Report = {
-        id: crypto.randomUUID(),
-        project_id: projectId,
-        name,
-        format: tpl.format,
-        status: 'generating',
-        config: { template: tpl.id, demo: true },
-        file_url: null,
-        user_id: '',
-        created_at: new Date().toISOString(),
-      };
-      setReports(prev => [draft, ...prev]);
-      setTimeout(() => {
-        setReports(prev => prev.map(r => r.id === draft.id ? { ...r, status: 'completed' } : r));
-      }, 2500);
+      const res = await generateReport(projectId, selectedTemplate, lang);
+      if (!res.ok) {
+        setError(t(`reports.err.${reportErrorCode(res.code)}`));
+        return;
+      }
+      if (res.brandNameMissing) setNotice(t('reports.brand.missingName'));
       setShowGenerator(false);
       setSelectedTemplate(null);
+      await loadReports();
     } catch (err) {
-      reportError(err, { where: 'ReportsTab.generate#1' });
+      reportError(err, { where: 'ReportsTab.generate' });
+      setError(t('reports.err.unknown'));
     } finally {
       setGenerating(false);
     }
-  }, [selectedTemplate, projectId, lang]);
+  }, [selectedTemplate, projectId, lang, loadReports, t]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    setDeletingId(id);
-    const { error } = await supabase.from('reports').delete().eq('id', id);
-    if (!error) {
-      setReports(prev => prev.filter(r => r.id !== id));
+  const open = useCallback(async (report: Report, download: boolean) => {
+    if (!report.file_url) return;
+    setError(null);
+    const { data, error: err } = await supabase.storage.from('reports').createSignedUrl(
+      report.file_url, SIGNED_URL_SECONDS, download ? { download: `${report.name}.${report.format}` } : undefined,
+    );
+    if (err || !data?.signedUrl) {
+      if (err) reportError(err, { where: 'ReportsTab.signedUrl' });
+      setError(t('reports.err.download'));
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  }, [t]);
+
+  const handleDelete = useCallback(async (report: Report) => {
+    setDeletingId(report.id);
+    setError(null);
+    const { error: err } = await supabase.from('reports').delete().eq('id', report.id);
+    if (err) {
+      reportError(err, { where: 'ReportsTab.delete' });
+      setError(t('reports.err.delete'));
+    } else {
+      setReports(prev => prev.filter(r => r.id !== report.id));
+      if (report.file_url) {
+        const { error: rmErr } = await supabase.storage.from('reports').remove([report.file_url]);
+        if (rmErr) reportError(rmErr, { where: 'ReportsTab.removeFile' });
+      }
     }
     setDeletingId(null);
-  }, []);
+  }, [t]);
+
+  const handleLogo = useCallback(async (file: File | undefined) => {
+    if (!file || !user) return;
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      const out = await toJpegLogo(file);
+      if ('error' in out) { setLogoError(t(`reports.logo.err.${out.error}`)); return; }
+      const { error: err } = await supabase.storage.from('reports').upload(logoPath(user.id), out.blob, {
+        upsert: true, contentType: 'image/jpeg',
+      });
+      if (err) { reportError(err, { where: 'ReportsTab.logoUpload' }); setLogoError(t('reports.logo.err.upload')); return; }
+      await refreshLogo();
+    } finally {
+      setLogoBusy(false);
+      if (fileInput.current) fileInput.current.value = '';
+    }
+  }, [user, refreshLogo, t]);
+
+  const removeLogo = useCallback(async () => {
+    if (!user) return;
+    setLogoBusy(true);
+    setLogoError(null);
+    const { error: err } = await supabase.storage.from('reports').remove([logoPath(user.id)]);
+    if (err) { reportError(err, { where: 'ReportsTab.logoRemove' }); setLogoError(t('reports.logo.err.upload')); } else setLogoUrl(null);
+    setLogoBusy(false);
+  }, [user, t]);
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <DemoBanner feature="reports" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">{t('reports.title')}</h2>
           <p className="text-sm text-neutral-500 mt-1">{reports.length} {t('reports.subtitle')}</p>
         </div>
-        <button onClick={() => setShowGenerator(!showGenerator)} className="btn-primary">
-          <Plus className="w-4 h-4" /> {t('reports.generate')}
-        </button>
+        {canWrite && (
+          <button onClick={() => setShowGenerator(!showGenerator)} className="btn-primary">
+            <Plus className="w-4 h-4" /> {t('reports.generate')}
+          </button>
+        )}
       </div>
 
+      {error && (
+        <p role="alert" className="p-3 rounded-xl bg-clay-50 border border-clay-200 text-sm text-clay-800 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="p-3 rounded-xl bg-gold-50 border border-gold-200 text-sm text-gold-800 flex items-start gap-2">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> {notice}{' '}
+          <Link to="/settings" className="underline">{t('reports.brand.openSettings')}</Link>
+        </p>
+      )}
+
       {/* Report generator */}
-      {showGenerator && (
+      {showGenerator && canWrite && (
         <div className="card p-6 animate-slide-up">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-neutral-900">{t('reports.template')}</h3>
-            <button onClick={() => setShowGenerator(false)} className="btn-ghost p-2">✕</button>
+            <button onClick={() => setShowGenerator(false)} className="btn-ghost p-2" aria-label={t('reports.cancel')}>✕</button>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-3 mb-4">
-            {reportTemplates.map((tpl) => {
+          <div className="grid sm:grid-cols-3 gap-3 mb-4" role="radiogroup" aria-label={t('reports.template')}>
+            {templates.map((tpl) => {
               const Icon = tpl.icon;
               return (
                 <button
                   key={tpl.id}
+                  role="radio"
+                  aria-checked={selectedTemplate === tpl.id}
                   onClick={() => setSelectedTemplate(tpl.id)}
                   className={cn(
                     'flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all',
@@ -138,42 +194,63 @@ export function ReportsTab({ projectId }: { projectId: string }) {
                   )}
                 >
                   <Icon className="w-6 h-6 text-savanna-600" />
-                  <div className="font-semibold text-neutral-900 text-sm">{lang === 'fr' ? tpl.nameFr : tpl.nameKey}</div>
-                  <div className="text-xs text-neutral-500">{lang === 'fr' ? tpl.descFr : tpl.descEn}</div>
-                  <span className="badge-neutral mt-1">{formatLabels[tpl.format]}</span>
+                  <div className="font-semibold text-neutral-900 text-sm">{t(`reports.tpl.${tpl.id}`)}</div>
+                  <div className="text-xs text-neutral-500">{t(`reports.tpl.${tpl.id}.desc`)}</div>
+                  <span className="badge-neutral mt-1">{tpl.format.toUpperCase()}</span>
                 </button>
               );
             })}
           </div>
-
-          {/* Delivery options */}
-          <div className="border-t border-neutral-100 pt-4">
-            <h4 className="text-sm font-semibold text-neutral-700 mb-3">{t('reports.delivery')}</h4>
-            <div className="flex flex-wrap gap-3">
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-                <input type="checkbox" className="rounded text-savanna-600" defaultChecked />
-                <Download className="w-4 h-4 text-neutral-500" />
-                <span className="text-sm">{t('reports.download')}</span>
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-                <input type="checkbox" className="rounded text-savanna-600" />
-                <Mail className="w-4 h-4 text-neutral-500" />
-                <span className="text-sm">{t('reports.email')}</span>
-              </label>
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-                <input type="checkbox" className="rounded text-savanna-600" />
-                <MessageCircle className="w-4 h-4 text-forest-600" />
-                <span className="text-sm">{t('reports.whatsapp')}</span>
-              </label>
-            </div>
-          </div>
+          <p className="text-xs text-neutral-500">{t('reports.truth')}</p>
 
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setShowGenerator(false)} className="btn-secondary">{t('reports.cancel')}</button>
             <button onClick={handleGenerate} disabled={!selectedTemplate || generating} className="btn-primary">
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {t('reports.gen.btn')}
+              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} {t('reports.gen.btn')}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Marque : DAS en gratuit, nom + logo du client en Premium (décidé par le serveur) */}
+      {showBrandPanel && (
+        <div className="card p-6">
+          <h3 className="font-semibold text-neutral-900">{t('reports.brand.title')}</h3>
+          {!premium ? (
+            <p className="text-sm text-neutral-500 mt-1">
+              {t('reports.brand.free')}{' '}
+              <Link to="/pricing" className="text-savanna-700 underline">{t('reports.brand.upgrade')}</Link>
+            </p>
+          ) : (
+            <div className="mt-2 space-y-3">
+              <p className="text-sm text-neutral-600">
+                {company
+                  ? <>{t('reports.brand.name')} <strong>{company}</strong> · <Link to="/settings" className="text-savanna-700 underline">{t('reports.brand.change')}</Link></>
+                  : <>{t('reports.brand.missingName')} <Link to="/settings" className="text-savanna-700 underline">{t('reports.brand.openSettings')}</Link></>}
+              </p>
+              <div className="flex items-center gap-4 flex-wrap">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={t('reports.logo.alt')} className="h-12 max-w-[200px] object-contain rounded border border-neutral-200 bg-white p-1" />
+                ) : (
+                  <span className="text-sm text-neutral-400">{t('reports.logo.none')}</span>
+                )}
+                <input
+                  ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" id="brand-logo"
+                  aria-label={t('reports.logo.upload')} onChange={(e) => handleLogo(e.target.files?.[0])}
+                />
+                <button type="button" className="btn-secondary text-sm" disabled={logoBusy} onClick={() => fileInput.current?.click()}>
+                  {logoBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />} {t('reports.logo.upload')}
+                </button>
+                {logoUrl && (
+                  <button type="button" className="btn-ghost text-sm text-clay-600" disabled={logoBusy} onClick={removeLogo}>
+                    {t('reports.logo.remove')}
+                  </button>
+                )}
+              </div>
+              {logoError && <p role="alert" className="text-sm text-clay-700">{logoError}</p>}
+              <p className="text-xs text-neutral-400">{t('reports.logo.hint')}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -188,58 +265,45 @@ export function ReportsTab({ projectId }: { projectId: string }) {
             icon={<FileText className="w-8 h-8" />}
             title={t('reports.empty.title')}
             description={t('reports.empty.desc')}
-            action={<button onClick={() => setShowGenerator(true)} className="btn-primary"><Plus className="w-4 h-4" /> {t('reports.generate')}</button>}
+            action={canWrite ? <button onClick={() => setShowGenerator(true)} className="btn-primary"><Plus className="w-4 h-4" /> {t('reports.generate')}</button> : undefined}
           />
         </div>
       ) : (
         <div className="card divide-y divide-neutral-100">
           {reports.map((report) => {
-            const FormatIcon = formatIcons[report.format] || FileText;
-            const colorClass = formatColors[report.format] || 'neutral';
+            const isCsv = report.format === 'csv';
+            const branding = report.config?.branding === 'custom' ? 'custom' : 'das';
             return (
               <div key={report.id} className="flex items-center gap-4 p-4 hover:bg-neutral-50/50 transition-colors">
-                <div className={cn(
-                  'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
-                  colorClass === 'clay' && 'bg-clay-50 text-clay-600',
-                  colorClass === 'savanna' && 'bg-savanna-50 text-savanna-600',
-                  colorClass === 'ocean' && 'bg-ocean-50 text-ocean-600',
-                )}>
-                  <FormatIcon className="w-5 h-5" />
+                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', isCsv ? 'bg-ocean-50 text-ocean-600' : 'bg-clay-50 text-clay-600')}>
+                  {isCsv ? <FileSpreadsheet className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-neutral-900 text-sm truncate">{report.name}</h3>
                   <div className="flex items-center gap-3 text-xs text-neutral-400 mt-0.5">
-                    <span>{formatLabels[report.format] || report.format}</span>
+                    <span>{report.format.toUpperCase()}</span>
                     <span>· {timeAgo(report.created_at, lang)}</span>
+                    <span>· {t(`reports.branding.${branding}`)}</span>
                   </div>
                 </div>
-                {report.status === 'completed' ? (
+                {report.file_url ? (
                   <>
-                    <span className="badge-forest hidden sm:inline-flex">
-                      <CheckCircle2 className="w-3 h-3" /> {t('reports.ready')}
-                    </span>
-                    <button className="btn-ghost p-2" aria-label="View report"><Eye className="w-4 h-4" /></button>
-                    <button
-                      onClick={() => {
-                        if (report.file_url) {
-                          supabase.storage.from('reports').createSignedUrl(report.file_url, 3600).then(({ data }) => {
-                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-                          });
-                        }
-                      }}
-                      className="btn-ghost p-2 text-savanna-600" aria-label="Download report"
-                    ><Download className="w-4 h-4" /></button>
+                    {!isCsv && (
+                      <button onClick={() => open(report, false)} className="btn-ghost p-2" aria-label={t('reports.view')}><Eye className="w-4 h-4" /></button>
+                    )}
+                    <button onClick={() => open(report, true)} className="btn-ghost p-2 text-savanna-600" aria-label={t('reports.download')}>
+                      <Download className="w-4 h-4" />
+                    </button>
                   </>
                 ) : (
-                  <span className="badge-gold">
-                    <Clock className="w-3 h-3 animate-pulse" /> {t('reports.generating')}
-                  </span>
+                  <span className="badge-neutral">{t('reports.unavailable')}</span>
                 )}
                 {canWrite && (
                   <button
-                    onClick={() => handleDelete(report.id)}
+                    onClick={() => handleDelete(report)}
                     disabled={deletingId === report.id}
                     className="btn-ghost p-2 text-clay-600 disabled:opacity-50"
+                    aria-label={t('reports.delete')}
                   >
                     {deletingId === report.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   </button>
@@ -249,24 +313,6 @@ export function ReportsTab({ projectId }: { projectId: string }) {
           })}
         </div>
       )}
-
-      {/* Scheduled reports info */}
-      <div className="card p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-ocean-50 flex items-center justify-center shrink-0">
-            <Clock className="w-5 h-5 text-ocean-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-neutral-900">{t('reports.scheduled')}</h3>
-            <p className="text-sm text-neutral-500 mt-1">
-              {t('reports.scheduled.desc')}
-            </p>
-            <button className="btn-secondary text-sm mt-3">
-              <Plus className="w-4 h-4" /> {t('reports.schedule.new')}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
