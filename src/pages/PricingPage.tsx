@@ -27,8 +27,8 @@ export default function PricingPage() {
       name: t('pricing.premium'), icon: Crown, price: formatXof(PREMIUM_PRICE_XOF, lang), period: t('pricing.month'), desc: t('pricing.premium.desc'),
       planKey: 'premium',
       features: lang === 'fr'
-        ? ['Projets et jeux de données illimités', 'AutoML complet (réglages optimisés)', 'Tous les modules sectoriels — bientôt', 'PNT avancée & multilingue — bientôt', 'Accès API — bientôt', 'Rapports white-label — bientôt', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire']
-        : ['Unlimited projects and datasets', 'Full AutoML (tuned settings)', 'All sector-specific modules — soon', 'Advanced NLP & multilingual support — soon', 'API access — soon', 'White-label reports — soon', 'Priority support', 'Team collaboration (up to 10 users)'],
+        ? ['Projets et jeux de données illimités', 'AutoML complet (réglages optimisés)', 'Tous les modules sectoriels — bientôt', 'PNT avancée & multilingue — bientôt', 'Accès API — bientôt', 'Rapports PDF et CSV, à votre marque (nom et logo)', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire']
+        : ['Unlimited projects and datasets', 'Full AutoML (tuned settings)', 'All sector-specific modules — soon', 'Advanced NLP & multilingual support — soon', 'API access — soon', 'PDF and CSV reports with your own branding (name and logo)', 'Priority support', 'Team collaboration (up to 10 users)'],
       cta: t('pricing.trial.btn'), highlight: true, color: 'savanna',
     },
     {

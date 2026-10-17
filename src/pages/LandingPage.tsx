@@ -88,7 +88,7 @@ export function LandingPage() {
     },
     {
       name: t('pricing.premium'), price: formatXof(PREMIUM_PRICE_XOF, lang), period: t('pricing.month'), desc: t('pricing.premium.desc'),
-      features: lang === 'fr' ? ['Projets illimités', 'AutoML complet', 'Tous les modules sectoriels', 'PNT avancée & multilingue', 'Accès API', 'Rapports white-label', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire'] : ['Unlimited projects', 'Full AutoML suite', 'All sector modules', 'Advanced NLP & multilingual', 'API access', 'White-label reports', 'Team collaboration (10 users)', 'Priority support'],
+      features: lang === 'fr' ? ['Projets illimités', 'AutoML complet', 'Tous les modules sectoriels', 'PNT avancée & multilingue', 'Accès API', 'Rapports PDF/CSV à votre marque', 'Collaboration équipe (10 utilisateurs)', 'Support prioritaire'] : ['Unlimited projects', 'Full AutoML suite', 'All sector modules', 'Advanced NLP & multilingual', 'API access', 'PDF/CSV reports with your branding', 'Team collaboration (10 users)', 'Priority support'],
       cta: t('pricing.trial.btn'), highlight: true,
     },
     {

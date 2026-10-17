@@ -29,11 +29,19 @@ describe('garde-fous statiques du code livré', () => {
   });
   it('les pages de démonstration affichent le bandeau Démo', () => {
     const need: Record<string, string> = {
-      'src/pages/AssistantPage.tsx': 'assistant', 'src/pages/workspace/tabs/ReportsTab.tsx': 'reports',
+      'src/pages/AssistantPage.tsx': 'assistant',
     };
     for (const [f, feat] of Object.entries(need)) {
       expect(readFileSync(f, 'utf8')).toContain(`<DemoBanner feature="${feat}" />`);
     }
+  });
+  it('les rapports sont réels : plus de bandeau Démo ni de génération simulée, fichier produit par le serveur', () => {
+    const tab = readFileSync('src/pages/workspace/tabs/ReportsTab.tsx', 'utf8');
+    expect(tab).not.toContain('DemoBanner');
+    expect(tab).not.toMatch(/setTimeout|demo: true|Math\.random/);
+    expect(tab).toContain('generateReport(');
+    // aucune option de livraison factice (e-mail / WhatsApp) tant qu'elle n'existe pas
+    expect(tab).not.toMatch(/whatsapp|reports\.email/i);
   });
   it('les pipelines sont réels : plus de bandeau Démo, exécution déléguée au serveur', () => {
     const tab = readFileSync('src/pages/workspace/tabs/PipelineTab.tsx', 'utf8');
