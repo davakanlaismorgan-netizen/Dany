@@ -554,7 +554,7 @@ export const fr: Record<string, string> = {
   'settings.currentplan': 'Plan Actuel',
   'settings.currentplan.desc': 'Gérez votre abonnement',
   'settings.upgrade.title': 'Passer à Premium',
-  'settings.upgrade.desc': 'Débloquez des projets, visualisations et lignes illimités, et invitez jusqu’à 10 collègues. AutoML complet et modules sectoriels arrivent bientôt.',
+  'settings.upgrade.desc': 'Débloquez des projets, visualisations et lignes illimités, et invitez jusqu’à 10 collègues. Les modules sectoriels arrivent bientôt.',
   'settings.team.title': 'Membres de l\'Équipe',
   'settings.team.desc': 'Invitez vos collègues à collaborer sur vos projets.',
   'settings.team.invite': 'Inviter',
