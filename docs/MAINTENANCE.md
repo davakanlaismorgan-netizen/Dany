@@ -15,6 +15,6 @@ Mises à jour compatibles appliquées (`npm update`). **Montées de version maje
 
 ## Code
 - `SettingsPage.tsx` (~560 lignes) reste à découper en un composant par onglet.
-- L'assistant IA reste une démonstration (signalée « Démonstration ») : à implémenter ou retirer (décision produit). Les rapports sont réels (`docs/RAPPORTS.md`).
+- L'assistant IA est réel (`docs/ASSISTANT.md`) : ne jamais perdre `AI_KEY_ENCRYPTION_SECRET`. Les rapports sont réels (`docs/RAPPORTS.md`).
 - Excel (.xlsx) non pris en charge à l'import (CSV/JSON uniquement).
 - Le traitement serveur des fichiers n'a pas été éprouvé sur de gros fichiers avec les limites réelles d'une edge function Supabase.

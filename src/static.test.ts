@@ -27,13 +27,14 @@ describe('garde-fous statiques du code livré', () => {
     expect(src.filter(([f]) => /mockData/.test(f)).map(([f]) => f)).toEqual([]);
     expect(src.filter(([, c]) => /from '@\/lib\/mockData'/.test(c)).map(([f]) => f)).toEqual([]);
   });
-  it('les pages de démonstration affichent le bandeau Démo', () => {
-    const need: Record<string, string> = {
-      'src/pages/AssistantPage.tsx': 'assistant',
-    };
-    for (const [f, feat] of Object.entries(need)) {
-      expect(readFileSync(f, 'utf8')).toContain(`<DemoBanner feature="${feat}" />`);
-    }
+  it("l'assistant IA est réel : plus de réponses préenregistrées ni de bandeau Démo, appels délégués au serveur", () => {
+    const page = readFileSync('src/pages/AssistantPage.tsx', 'utf8');
+    expect(page).not.toMatch(/DemoBanner|mockResponses|setTimeout|Math\.random/);
+    expect(page).toContain('sendAssistantMessage(');
+    const lib = readFileSync('src/lib/assistant.ts', 'utf8');
+    expect(lib).toContain("functions.invoke('ai-assistant'");
+    // le navigateur ne parle jamais directement à un fournisseur LLM
+    expect(src.filter(([, c]) => /api\.(anthropic|openai)\.com/.test(c)).map(([f]) => f)).toEqual([]);
   });
   it('les rapports sont réels : plus de bandeau Démo ni de génération simulée, fichier produit par le serveur', () => {
     const tab = readFileSync('src/pages/workspace/tabs/ReportsTab.tsx', 'utf8');
