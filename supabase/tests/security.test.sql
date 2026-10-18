@@ -403,6 +403,30 @@ select tests.expect_rows('légitime: A change le rôle d''une invitation', 'auth
 select tests.expect_val('E ne voit aucune ligne d''équipe', 'authenticated', :E::uuid, 'e@test.dev',
   $q$select count(*) from public.team_members$q$, '0');
 
+-- ----- E-mail d'invitation : suivi des envois réservé au serveur -----
+select tests.expect_fail('ATTAQUE: A remet à zéro le compteur d''e-mails de son invitation', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set invite_email_count = 0 where lower(member_email) = 'f@test.dev'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A efface la date du dernier e-mail pour contourner le délai', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$update public.team_members set invite_emailed_at = null where lower(member_email) = 'f@test.dev'$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A réserve lui-même un envoi (fonction réservée au serveur)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select * from public.claim_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), 600, 5)$q$, 'permission denied');
+select tests.expect_fail('ATTAQUE: A libère une réservation (fonction réservée au serveur)', 'authenticated', :A::uuid, 'a@test.dev',
+  $q$select public.release_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), null)$q$, 'permission denied');
+select tests.expect_val('serveur: première réservation acceptée', 'service_role', null, null,
+  $q$select claimed::text from public.claim_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), 600, 5)$q$, 'true');
+select tests.expect_val('serveur: deuxième envoi immédiat refusé (délai)', 'service_role', null, null,
+  $q$select reason from public.claim_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), 600, 5)$q$, 'too_soon');
+select tests.expect_val('serveur: plafond d''envois par invitation', 'service_role', null, null,
+  $q$select reason from public.claim_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), 0, 1)$q$, 'max_sent');
+select tests.expect_val('serveur: le refus ne consomme pas d''envoi', 'postgres', null, null,
+  $q$select invite_email_count::text from public.team_members where lower(member_email) = 'f@test.dev'$q$, '1');
+select tests.expect_ok('serveur: libère la réservation si le fournisseur échoue', 'service_role', null, null,
+  $q$select public.release_invitation_email((select id from public.team_members where lower(member_email) = 'f@test.dev'), null)$q$);
+select tests.expect_val('après libération : compteur et date remis comme avant', 'postgres', null, null,
+  $q$select (invite_email_count = 0 and invite_emailed_at is null)::text from public.team_members where lower(member_email) = 'f@test.dev'$q$, 'true');
+select tests.expect_val('serveur: invitation inconnue ou déjà traitée refusée', 'service_role', null, null,
+  $q$select reason from public.claim_invitation_email('00000000-0000-0000-0000-000000000000', 600, 5)$q$, 'not_pending');
+
 -- ----- Avant acceptation : aucun accès -----
 select tests.expect_val('invitation en attente: B ne voit pas le projet de A', 'authenticated', :B::uuid, 'b@test.dev',
   $q$select count(*) from public.projects where id = 'aaaaaaaa-1111-0000-0000-000000000001'$q$, '0');
