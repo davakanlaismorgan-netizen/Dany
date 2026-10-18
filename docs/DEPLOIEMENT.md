@@ -104,7 +104,7 @@ Collaboration Premium / Entreprise : voir `docs/EQUIPE.md` (droits, mise en serv
 
 ## 8. Limites connues
 
-- L'assistant IA est une **simulation** dans l'interface : il ne traite pas encore les données réelles.
+- L'**assistant IA** est réel, avec la clé API de l'utilisateur (`docs/ASSISTANT.md`, secret `AI_KEY_ENCRYPTION_SECRET` à créer).
   Les **pipelines** (`docs/PIPELINES.md`), l'**AutoML** (`docs/AUTOML.md`, entraînement sur un échantillon de 1 000 lignes)
   et les **rapports PDF/CSV à votre marque** (`docs/RAPPORTS.md`) sont réels.
 - Les moyens de paiement et les compteurs d'usage affichés dans Paramètres > Facturation sont des valeurs d'exemple.

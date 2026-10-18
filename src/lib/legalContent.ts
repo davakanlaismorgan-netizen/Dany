@@ -40,7 +40,7 @@ export function getLegalDoc(slug: LegalSlug, lang: 'fr' | 'en', c: LegalContext)
         { heading: '5. Remboursement', paragraphs: [
           `Les paiements ne sont pas remboursables, sauf erreur de facturation ou défaillance du service imputable à l'éditeur. Toute demande est examinée au cas par cas en écrivant à ${contact}.`] },
         { heading: '6. Fonctionnalités en démonstration', paragraphs: [
-          "Certaines fonctionnalités (assistant IA, AutoML, pipelines, rapports, marketplace, équipes) sont proposées en aperçu ou en démonstration. Les résultats qu'elles affichent sont illustratifs : ils ne constituent pas une analyse réelle de vos données et ne doivent pas servir de base à une décision."] },
+          "Certaines fonctionnalités (par exemple la marketplace) sont proposées en démonstration : les résultats qu'elles affichent sont illustratifs et ne doivent pas servir de base à une décision. L'assistant IA fonctionne avec votre propre clé de fournisseur (Anthropic ou OpenAI) : les questions et les statistiques calculées par DAS sur votre projet sont transmises à ce fournisseur, selon ses propres conditions. Ses réponses peuvent contenir des erreurs : vérifiez les conclusions importantes."] },
         { heading: '7. Vos données et contenus', paragraphs: [
           "Vous restez propriétaire des données et fichiers que vous importez. Vous nous accordez uniquement le droit de les héberger et de les traiter pour fournir le service. Vous garantissez avoir le droit d'utiliser ces données et vous vous interdisez d'importer des contenus illicites."] },
         { heading: '8. Usage acceptable', paragraphs: [
@@ -70,7 +70,7 @@ export function getLegalDoc(slug: LegalSlug, lang: 'fr' | 'en', c: LegalContext)
         { heading: '5. Refunds', paragraphs: [
           `Payments are non-refundable, except in case of a billing error or a service failure attributable to the publisher. Each request is reviewed case by case by writing to ${contact}.`] },
         { heading: '6. Demonstration features', paragraphs: [
-          'Some features (AI assistant, AutoML, pipelines, reports, marketplace, teams) are offered as previews or demonstrations. The results they display are illustrative: they are not a real analysis of your data and must not be used as the basis for a decision.'] },
+          'Some features (for example the marketplace) are offered as demonstrations: the results they display are illustrative and must not be used as the basis for a decision. The AI assistant works with your own provider key (Anthropic or OpenAI): your questions and the statistics DAS computes on your project are sent to that provider, under its own terms. Its answers may contain errors: verify important conclusions.'] },
         { heading: '7. Your data and content', paragraphs: [
           'You remain the owner of the data and files you import. You grant us only the right to host and process them to provide the service. You warrant that you have the right to use this data and you agree not to upload unlawful content.'] },
         { heading: '8. Acceptable use', paragraphs: [
