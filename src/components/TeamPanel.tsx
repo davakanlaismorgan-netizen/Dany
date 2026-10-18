@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Check, Loader2, Mail, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/context/I18nContext';
 import { reportError } from '@/lib/report';
 import {
   MAX_TEAM_PREMIUM, acceptInvitation, declineInvitation, inviteMember, isValidEmail, leaveTeam,
-  listInvitations, listMembers, listWorkspaces, removeMember, teamErrorKey, updateMemberRole,
+  listInvitations, listMembers, listWorkspaces, notifyErrorCode, notifyInvitation, removeMember, teamErrorKey, updateMemberRole,
   type Invitation, type TeamMember, type TeamRole, type Workspace,
 } from '@/lib/team';
 import { ErrorState } from '@/components/ui/Loading';
@@ -14,7 +14,7 @@ import { ErrorState } from '@/components/ui/Loading';
 const ROLES: TeamRole[] = ['viewer', 'editor'];
 
 export function TeamPanel() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user, profile } = useAuth();
   const isFree = (profile?.plan ?? 'free') === 'free';
   const isEnterprise = profile?.plan === 'enterprise';
@@ -25,6 +25,7 @@ export function TeamPanel() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<TeamRole>('viewer');
@@ -55,6 +56,7 @@ export function TeamPanel() {
   async function run(key: string, action: () => Promise<void>) {
     setBusy(key);
     setError(null);
+    setNotice(null);
     try {
       await action();
       await load();
@@ -78,10 +80,22 @@ export function TeamPanel() {
     }
     setInviting(true);
     await run('invite', async () => {
-      await inviteMember(email, role);
+      const id = await inviteMember(email, role);
+      const to = email.trim().toLowerCase();
       setEmail('');
+      await sendEmail(id, to);
     });
     setInviting(false);
+  }
+
+  // Envoie (ou renvoie) l'e-mail d'invitation. Un échec n'annule jamais l'invitation : on le dit honnêtement.
+  async function sendEmail(id: string, to: string) {
+    const res = await notifyInvitation(id, lang);
+    if (res.ok) {
+      setNotice(`${t('team.mail.sent')} ${to}`);
+    } else {
+      setNotice(`${t('team.mail.failed')} ${t(`team.mail.err.${notifyErrorCode(res.code)}`)}`);
+    }
   }
 
   if (loadFailed) return <ErrorState message={t('team.err.load')} onRetry={() => void load()} />;
@@ -174,6 +188,10 @@ export function TeamPanel() {
           </form>
         )}
 
+        {notice && (
+          <div role="status" className="mb-4 p-3 rounded-xl bg-neutral-50 border border-neutral-200 text-sm text-neutral-700">{notice}</div>
+        )}
+
         {!isFree && <p className="text-xs text-neutral-500 mb-4">{t('team.hint')}</p>}
 
         <ul className="space-y-2">
@@ -193,6 +211,17 @@ export function TeamPanel() {
                 <p className="text-sm font-medium text-neutral-800 truncate">{m.member_email}</p>
                 <span className={m.status === 'accepted' ? 'badge-forest' : 'badge-gold'}>{t(`team.status.${m.status}`)}</span>
               </div>
+              {m.status === 'pending' && (
+                <button
+                  type="button"
+                  className="btn-secondary text-sm py-1.5"
+                  disabled={busy !== null}
+                  aria-label={`${t('team.mail.resend')} ${m.member_email}`}
+                  onClick={() => run(`resend:${m.id}`, () => sendEmail(m.id, m.member_email))}
+                >
+                  {busy === `resend:${m.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} {t('team.mail.resend')}
+                </button>
+              )}
               <select
                 aria-label={t('team.role.label')}
                 value={m.role}

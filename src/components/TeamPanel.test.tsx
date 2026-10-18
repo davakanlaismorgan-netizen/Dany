@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   invitations: [] as unknown[],
   workspaces: [] as unknown[],
   invite: vi.fn(),
+  notify: vi.fn(),
+  notifyResult: { ok: true } as { ok: boolean; code?: string },
   accept: vi.fn(),
   failInvite: null as null | { message: string },
 }));
@@ -25,8 +27,9 @@ vi.mock('@/lib/team', async (orig) => ({
   listWorkspaces: () => Promise.resolve(h.workspaces),
   inviteMember: (email: string, role: string) => {
     h.invite(email, role);
-    return h.failInvite ? Promise.reject(h.failInvite) : Promise.resolve();
+    return h.failInvite ? Promise.reject(h.failInvite) : Promise.resolve('new-inv');
   },
+  notifyInvitation: (id: string, lang: string) => { h.notify(id, lang); return Promise.resolve(h.notifyResult); },
   acceptInvitation: (id: string) => { h.accept(id); return Promise.resolve(); },
 }));
 
@@ -37,7 +40,7 @@ const ui = () => render(<MemoryRouter><I18nProvider><TeamPanel /></I18nProvider>
 beforeEach(() => {
   h.plan = 'premium';
   h.members = []; h.invitations = []; h.workspaces = [];
-  h.invite.mockReset(); h.accept.mockReset(); h.failInvite = null;
+  h.invite.mockReset(); h.accept.mockReset(); h.notify.mockReset(); h.notifyResult = { ok: true }; h.failInvite = null;
 });
 afterEach(cleanup);
 
@@ -85,5 +88,36 @@ describe('TeamPanel', () => {
     ui();
     fireEvent.click(await screen.findByRole('button', { name: /accepter/i }));
     await waitFor(() => expect(h.accept).toHaveBeenCalledWith('inv1'));
+  });
+
+  it('après l’invitation : envoie l’e-mail et le confirme', async () => {
+    ui();
+    fireEvent.change(await screen.findByLabelText(/e-mail du collègue/i), { target: { value: 'a@b.co' } });
+    fireEvent.click(screen.getByRole('button', { name: /inviter/i }));
+    await waitFor(() => expect(h.notify).toHaveBeenCalledWith('new-inv', 'fr'));
+    expect((await screen.findByRole('status')).textContent).toMatch(/e-mail envoyé à a@b\.co/);
+  });
+
+  it('échec d’envoi : l’invitation reste créée et le message l’explique honnêtement', async () => {
+    h.notifyResult = { ok: false, code: 'email_not_configured' };
+    ui();
+    fireEvent.change(await screen.findByLabelText(/e-mail du collègue/i), { target: { value: 'a@b.co' } });
+    fireEvent.click(screen.getByRole('button', { name: /inviter/i }));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toMatch(/Invitation créée, mais/);
+    expect(status.textContent).toMatch(/pas encore activé/);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('bouton « Renvoyer l’e-mail » seulement pour les invitations en attente', async () => {
+    h.members = [
+      { id: 'm1', member_email: 'p@x.co', role: 'viewer', status: 'pending', created_at: '2026-10-01T00:00:00Z' },
+      { id: 'm2', member_email: 'ok@x.co', role: 'viewer', status: 'accepted', created_at: '2026-10-01T00:00:00Z' },
+    ];
+    ui();
+    const btn = await screen.findByRole('button', { name: /renvoyer l’e-mail p@x\.co/i });
+    expect(screen.queryByRole('button', { name: /renvoyer l’e-mail ok@x\.co/i })).toBeNull();
+    fireEvent.click(btn);
+    await waitFor(() => expect(h.notify).toHaveBeenCalledWith('m1', 'fr'));
   });
 });

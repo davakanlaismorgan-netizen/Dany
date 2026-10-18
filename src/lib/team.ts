@@ -58,9 +58,36 @@ export async function listMembers(ownerId: string): Promise<TeamMember[]> {
   return (data ?? []) as TeamMember[];
 }
 
-export async function inviteMember(email: string, role: TeamRole): Promise<void> {
-  const { error } = await supabase.from('team_members').insert({ member_email: email.trim().toLowerCase(), role });
+export async function inviteMember(email: string, role: TeamRole): Promise<string> {
+  const { data, error } = await supabase
+    .from('team_members')
+    .insert({ member_email: email.trim().toLowerCase(), role })
+    .select('id')
+    .single();
   if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export const NOTIFY_ERROR_CODES = [
+  'too_soon', 'max_sent', 'email_not_configured', 'send_failed', 'plan', 'not_found', 'not_pending', 'unauthorized',
+];
+// Code inconnu → message générique (pas de clé de traduction manquante).
+export const notifyErrorCode = (code: string): string => (NOTIFY_ERROR_CODES.includes(code) ? code : 'unknown');
+
+export type NotifyResult = { ok: true } | { ok: false; code: string };
+
+// L'e-mail est envoyé par le serveur (Brevo) : le navigateur ne fournit que l'identifiant de l'invitation et la langue.
+export async function notifyInvitation(invitationId: string, lang: 'fr' | 'en'): Promise<NotifyResult> {
+  const { error } = await supabase.functions.invoke('notify-invitation', {
+    body: { invitation_id: invitationId, lang },
+  });
+  if (!error) return { ok: true };
+  let body: { error?: unknown } = {};
+  const ctx = (error as { context?: unknown }).context;
+  if (ctx instanceof Response) {
+    try { body = await ctx.json(); } catch { /* corps non JSON */ }
+  }
+  return { ok: false, code: typeof body.error === 'string' ? body.error : 'unknown' };
 }
 
 export async function updateMemberRole(id: string, role: TeamRole): Promise<void> {

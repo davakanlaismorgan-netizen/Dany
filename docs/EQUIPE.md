@@ -38,6 +38,29 @@ Règles imposées **par la base** (RLS, fonctions SQL, triggers) ; l'interface n
 6. A retire B : B perd l'accès immédiatement (recharger la page).
 7. Invitez 10 personnes : la 11e est refusée avec un message clair (Premium).
 
+## E-mail d'invitation (Brevo)
+
+La fonction `notify-invitation` envoie l'e-mail via l'API Brevo (offre gratuite : 300 e-mails/jour). Elle est appelée
+automatiquement après l'invitation, et par le bouton « Renvoyer l'e-mail » sur les invitations en attente.
+
+Protections (côté serveur, non contournables depuis le navigateur) : seul le propriétaire de l'invitation peut
+déclencher l'envoi ; plan Premium/Entreprise effectif exigé ; 1 e-mail maximum toutes les 10 minutes et 5 au total par
+invitation (réservation atomique en base, annulée si Brevo refuse) ; l'adresse du site dans le lien vient de la
+configuration, jamais du navigateur ; le nom de l'inviteur est échappé dans le HTML.
+
+Mise en route (vous lancez ces commandes vous-même, ne collez jamais une clé dans un chat) :
+
+1. Créez un compte Brevo, puis **authentifiez votre domaine** (Senders, Domains & dedicated IPs : enregistrements DKIM et
+   DMARC chez votre registraire). Une adresse Gmail comme expéditeur arrive très souvent en spam.
+2. Créez une clé API (SMTP & API > API Keys).
+3. `npx supabase secrets set BREVO_API_KEY=... BREVO_SENDER_EMAIL=no-reply@votre-domaine.com BREVO_SENDER_NAME=DAS`
+   (optionnel : `SITE_URL=https://votre-site.com` ; sinon la première origine https de `ALLOWED_ORIGINS` est utilisée).
+4. `npx supabase db push` puis `npx supabase functions deploy notify-invitation --use-api`.
+5. Facultatif mais conseillé : dans Supabase > Authentication > SMTP Settings, renseignez les identifiants SMTP de Brevo
+   pour que les e-mails de confirmation de compte partent aussi par Brevo (le SMTP intégré est limité).
+
+Retour arrière : `supabase/rollback/20261018100000_invitation_email.down.sql` (à exécuter à la main).
+
 ## Retour arrière
 
 `supabase/rollback/20261013090000_team_collaboration.down.sql` (à exécuter à la main dans le SQL Editor ; ce dossier n'est
@@ -47,8 +70,9 @@ seules restent les colonnes ajoutées (`member_id`, `accepted_at`, `created_by`)
 
 ## Limites connues
 
-- **Aucun e-mail d'invitation** n'est envoyé (il faut un SMTP configuré) : le propriétaire prévient son collègue, qui voit
-  l'invitation dans Paramètres > Équipe après s'être connecté avec l'adresse invitée.
+- L'e-mail d'invitation n'est envoyé que si Brevo est configuré (voir ci-dessous). Sans configuration, l'invitation est
+  créée quand même et l'écran le dit clairement : le propriétaire prévient son collègue, qui voit l'invitation dans
+  Paramètres > Équipe après s'être connecté avec l'adresse invitée.
 - Un éditeur ne peut pas créer de projet dans l'espace du propriétaire (il faudrait un sélecteur d'espace de travail).
 - Le journal d'activité reste individuel : les actions d'un éditeur sont tracées sous son propre compte.
 - Les tests de sécurité tournent sur un PostgreSQL local qui simule Supabase (voir `supabase/tests/`) ; ils n'ont pas été
