@@ -21,4 +21,4 @@ Paiement **ponctuel d'un mois** (17 900 FCFA), sans renouvellement automatique. 
 `verify-kkiapay` accepte 10 tentatives par utilisateur et par 10 minutes (HTTP 429 ensuite). Si la base est indisponible, la fonction refuse (échec fermé).
 
 ## Non couvert
-Pas de reçus automatiques, ni de rappel d'expiration par email (nécessite un fournisseur d'emails/SMTP : décision à prendre). La politique de remboursement des CGU est un texte de travail à valider.
+Pas de reçus automatiques, ni de rappel d'expiration par email (l’envoi par Brevo existe déjà pour les invitations d’équipe, voir EQUIPE.md ; il reste à l’étendre à ces cas). La politique de remboursement des CGU est un texte de travail à valider.
